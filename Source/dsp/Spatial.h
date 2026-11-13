@@ -1,7 +1,7 @@
 #pragma once
 #include "Ambi.h"
 
-// Leitner's sound-space stage: what Cloudfin plays becomes two lines of sound that travel through
+// Leitner's sound space: the two channels you give it become two lines of sound that travel through
 // the room round you, after Bernhard Leitner's Ton-Raum work. He treated sound as a building
 // material: a sound sent from loudspeaker to loudspeaker draws a line, and lines moving in time make
 // a space you stand, sit or lie in. So here:
@@ -26,19 +26,6 @@
 //   and three figures: the Paraboloid (straight lines sweeping a curved surface, as the glissandi of
 //   Metastaseis became the Philips Pavilion), Terretektorh (a spiral that speeds up as it closes in)
 //   and Polytope (points thrown over the sphere, new ones every pass)
-//
-// And a pulse layer, after three people who make rhythm without a bar line:
-//   Mark Fell      the gaps between pulses come from a short list of unequal lengths (a cell) that
-//                  repeats, and the list can start one step further on at every pass ('rotate'), so the
-//                  same few numbers keep falling differently
-//   Gábor Lázár    one pulse train whose rate slides: 'bend' takes it from slow to fast (or back) over
-//                  each pass, through the point where a rhythm turns into a pitch; 'width' is how much
-//                  of each gap the pulse fills
-//   Kindohm        patterns made by rule, as in TidalCycles: 'hits' spread as evenly as they will go
-//                  over 'steps' (a Euclidean rhythm), 'drop' leaves pulses out at random, and 'jux'
-//                  gives line 2 the same pattern changed (backwards, turned, twice as fast, half)
-//   With 'pulse' up, each pulse sounds from the one place its line had reached when it began: a
-//   point in the room per pulse.
 //
 // Each line is encoded to Ambisonics (ACN, SN3D, 3rd to 7th order) at the points it's sounding
 // from, inside the sphere as well as on it, so a line can pass straight through you.
@@ -121,67 +108,9 @@ struct Params
     float swell = 0.0f;          // louder where the line comes nearest the body (Leitner: an approaching sound gets a crescendo)
     float lift = 0.0f;           // quieter as it rises, louder as it falls (his 'lifting' and 'dropping')
     float chance = 0.0f, walk = 0.0f, scatter = 0.0f; int sieve = 0;   // Xenakis (see the top of this file)
-    // the pulse layer (see the top of this file)
-    float pulse = 0.0f;          // 0: the lines sound all the time; 1: only in pulses
-    float pulseRate = 8.0f;      // pulses a second, at the middle of a pass
-    float pulseBend = 0.0f;      // -1..1: the rate slides over the pass, up to four octaves either way
-    float pulseWidth = 0.5f;     // how much of each gap is sound
-    int cell = 0, rotate = 0;    // Fell's interval cells, and how far the cell moves on at each pass
-    int hits = 8, steps = 8;     // a Euclidean pattern: 'hits' pulses sound in every 'steps'
-    float drop = 0.0f;           // the chance a pulse is left out
-    int jux = 0;                 // what line 2 does with the pattern
     float room = 0.15f, roomDecay = 3.0f, level = 1.0f;
     bool hold = false;           // stop the lines where they are
 };
-
-// the cells: lists of gap lengths, each brought to a mean of 1 so 'rate' stays the average rate
-constexpr int kNumCells = 8;
-inline const char* const* cellNames()
-{
-    static const char* const n[kNumCells] = { "even", "2 1", "3 2", "3 1 2", "5 3 2", "1 1 4", "7 1 1 3", "1 2 3 4 5" };
-    return n;
-}
-inline float cellGap (int cell, int index) noexcept
-{
-    static const float c[kNumCells][5] = { { 1 }, { 2, 1 }, { 3, 2 }, { 3, 1, 2 }, { 5, 3, 2 }, { 1, 1, 4 }, { 7, 1, 1, 3 }, { 1, 2, 3, 4, 5 } };
-    static const int len[kNumCells] = { 1, 2, 2, 3, 3, 3, 4, 5 };
-    cell = std::clamp (cell, 0, kNumCells - 1);
-    float sum = 0.0f;
-    for (int i = 0; i < len[cell]; ++i) sum += c[cell][i];
-    const int n = len[cell];
-    return c[cell][((index % n) + n) % n] * (float) n / sum;
-}
-inline int cellLength (int cell) noexcept { static const int len[kNumCells] = { 1, 2, 2, 3, 3, 3, 4, 5 }; return len[std::clamp (cell, 0, kNumCells - 1)]; }
-
-constexpr int kNumJux = 5;
-inline const char* const* juxNames()
-{
-    static const char* const n[kNumJux] = { "the same", "backwards", "turned", "twice as fast", "half as fast" };
-    return n;
-}
-
-// pulse number k of a pass, on line 0 or 1, at u (0..1) through the pass: how long until the next one
-// (seconds), and whether this one sounds
-inline float pulseGap (const Params& p, int line, uint32_t pass, int k, float u) noexcept
-{
-    const int j = line == 1 ? p.jux : 0;
-    const int n = cellLength (p.cell);
-    int idx = k + p.rotate * (int) (pass % 64u);
-    if (j == 1) idx = n - 1 - (((idx % n) + n) % n);
-    if (j == 2) idx += n / 2 + 1;
-    const float rate = std::clamp (p.pulseRate * std::exp2 (4.0f * p.pulseBend * (u - 0.5f)) * (j == 3 ? 2.0f : j == 4 ? 0.5f : 1.0f), 0.1f, 2000.0f);
-    return cellGap (p.cell, idx) / rate;
-}
-inline bool pulseSounds (const Params& p, int line, uint32_t pass, int k) noexcept
-{
-    const int j = line == 1 ? p.jux : 0;
-    const int n = std::clamp (p.steps, 1, 32), h = std::clamp (p.hits, 1, n);
-    int i = k % n;
-    if (j == 1) i = n - 1 - i;
-    if (j == 2) i = (i + n / 2) % n;
-    if ((i * h) % n >= h) return false;                                       // not one of the Euclidean hits
-    return p.drop <= 0.0f || hash01 (pass, (uint32_t) k, 31u + (uint32_t) line) >= p.drop;   // or left out by chance
-}
 
 // what chance has decided so far: which pass this is, and where the random walk has taken the figure
 struct State { uint32_t pass = 0; float dTurn = 0.0f, dHeight = 0.0f; };
@@ -351,35 +280,6 @@ public:
                 place (li, p, order, target, lvl);
                 const float* x = in[li] + off;
 
-                // the pulses: a gate that opens for part of each gap, and the place held for as long as a pulse lasts
-                float gated[kBlock];
-                if (p.pulse > 0.0f)
-                {
-                    double u = phase + (li == 1 ? 0.5 * (double) p.counter : 0.0); u -= std::floor (u);
-                    if (u < L.lastU && ! p.hold) { L.k = 0; L.left = 0; }   // a new pass: the pattern starts again
-                    L.lastU = u;
-                    bool onset = false;
-                    const float coef = 1.0f - std::exp (-1.0f / (0.0004f * (float) sr));
-                    for (int i = 0; i < m; ++i)
-                    {
-                        if (L.left <= 0)
-                        {
-                            L.len = std::max (8, (int) (sr * (double) pulseGap (p, li, st.pass, L.k, (float) u)));
-                            L.gate = std::max (4, (int) ((float) L.len * std::clamp (p.pulseWidth, 0.02f, 1.0f)));
-                            L.sounding = pulseSounds (p, li, st.pass, L.k);
-                            L.left = L.len; ++L.k; onset = true;
-                        }
-                        const bool open = L.sounding && (L.len - L.left) < L.gate;
-                        L.env += coef * ((open ? 1.0f : 0.0f) - L.env);
-                        gated[i] = x[i] * (1.0f - p.pulse + p.pulse * L.env);
-                        --L.left;
-                    }
-                    x = gated;
-                    if (onset || ! L.has) { L.held = target; L.heldLvl = lvl; L.has = true; }
-                    target = L.held; lvl = L.heldLvl * (1.0f - p.pulse + p.pulse * L.env);
-                }
-                else { L.has = false; L.env = 1.0f; L.left = 0; L.k = 0; }
-
                 if (first) L.g = target;
                 const float inv = 1.0f / (float) m;
                 float pk = 0.0f;
@@ -440,7 +340,7 @@ public:
     }
 
 private:
-    struct Line { Coefs g {}, held {}; float level = 0.0f, env = 1.0f, heldLvl = 1.0f; int left = 0, len = 1, gate = 0, k = 0; bool sounding = true, has = false; double lastU = 0.0; };
+    struct Line { Coefs g {}; float level = 0.0f; };
 
     // a pass is over: chance decides how long the next one takes and where the walk steps to
     void nextPass (const Params& p) noexcept

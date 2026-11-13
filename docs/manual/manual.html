@@ -27,11 +27,11 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 
 <div class="cover">
 <h1>LEITNER</h1>
-<p class="sub" style="margin-top:7mm">Cloudfin as a sound space <span class="x">xxxxx</span> Cloudfin als Ton-Raum</p>
-<p>An Ambisonics encoder, 3rd to 7th order, after Bernhard Leitner and Iannis Xenakis, with pulses after Mark Fell, G&aacute;bor L&aacute;z&aacute;r and Kindohm</p>
+<p class="sub" style="margin-top:7mm">a sound space <span class="x">xxxxx</span> ein Ton-Raum</p>
+<p>A spatialization plug-in after Bernhard Leitner and Iannis Xenakis: an Ambisonics encoder, 3rd to 7th order</p>
 <img src="../front.jpg">
 <p>M A N U A L <span class="x">xxxxx</span> H A N D B U C H</p>
-<p class="de">version 0.2</p>
+<p class="de">version 0.3</p>
 </div>
 
 <section>
@@ -39,22 +39,20 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <table class="toc">
 <tr><td>1. What Leitner is</td><td>2</td></tr>
 <tr><td>2. Installing it, and routing it to a decoder</td><td>2</td></tr>
-<tr><td>3. The window</td><td>4</td></tr>
-<tr><td>4. The room: seeing where things are</td><td>5</td></tr>
-<tr><td>5. The space: lines of sound</td><td>6</td></tr>
-<tr><td>6. The figures</td><td>8</td></tr>
-<tr><td>7. Chance: what comes from Xenakis</td><td>9</td></tr>
-<tr><td>8. Pulses: Fell, L&aacute;z&aacute;r, Kindohm</td><td>10</td></tr>
-<tr><td>9. Programs, and your own presets</td><td>12</td></tr>
-<tr><td>10. The sound program: Cloudfin's effects</td><td>14</td></tr>
-<tr><td>11. Starting points</td><td>16</td></tr>
-<tr><td>12. If something seems wrong</td><td>16</td></tr>
-<tr><td>13. Every parameter</td><td>17</td></tr>
-<tr><td>14. Sources and credits</td><td>19</td></tr>
+<tr><td>3. The window: three sheets</td><td>4</td></tr>
+<tr><td>4. The room: seeing where things are</td><td>7</td></tr>
+<tr><td>5. The space: lines of sound</td><td>8</td></tr>
+<tr><td>6. The figures</td><td>10</td></tr>
+<tr><td>7. Chance: what comes from Xenakis</td><td>11</td></tr>
+<tr><td>8. Programs, and your own presets</td><td>12</td></tr>
+<tr><td>9. Starting points</td><td>14</td></tr>
+<tr><td>10. If something seems wrong</td><td>14</td></tr>
+<tr><td>11. Every parameter</td><td>15</td></tr>
+<tr><td>12. Sources and credits</td><td>16</td></tr>
 </table>
 <h2 style="margin-top:14mm">1. What Leitner is</h2>
-<p>Leitner is the Ambisonics version of Cloudfin. It has Cloudfin's seven effects, its feedback loop, its drift and its presets (the <b>sound program</b>). After them comes one more stage, the <b>space program</b>: the stereo that Cloudfin makes is sent through a room as two lines of sound, and encoded to Ambisonics.</p>
-<p>It is an <b>encoder</b>. Stereo goes in; Ambisonics come out, in ACN channel order with SN3D normalisation (the AmbiX format that the IEM and SPARTA plug-ins use). It decodes nothing itself: you route it to a decoder for your loudspeakers or headphones.</p>
+<p>Leitner is a spatialization plug-in. It does one thing: it takes the sound you give it and sends it through a room round the listener as two <b>lines of sound</b>, after the Ton-Raum work of Bernhard Leitner, with the chance, random walks, clouds of points and sieves of Iannis Xenakis. The sound itself is not changed: Leitner only says <i>where</i> it is. (Leitner called this the space program, kept apart from the sound program; here the sound program is whatever you put on the track before it.)</p>
+<p>It is an <b>encoder</b>. Stereo (or mono) goes in; Ambisonics come out, in ACN channel order with SN3D normalisation (the AmbiX format that the IEM and SPARTA plug-ins use). It decodes nothing itself: you route it to a decoder for your loudspeakers or headphones.</p>
 <p>Channels out: <b>16</b> at 3rd order (the default), <b>25</b> at 4th, <b>36</b> at 5th, <b>49</b> at 6th and <b>64</b> at 7th.</p>
 <h2 style="margin-top:10mm">2. Installing it, and routing it to a decoder</h2>
 <p><b>macOS:</b> copy <b>Leitner.vst3</b> to <i>~/Library/Audio/Plug-Ins/VST3</i> and <b>Leitner.component</b> (Audio Unit) to <i>~/Library/Audio/Plug-Ins/Components</i>. <b>Windows:</b> copy <b>Leitner.vst3</b> to <i>C:\Program Files\Common Files\VST3</i>. <b>Linux:</b> copy <b>Leitner.vst3</b> to <i>~/.vst3</i> and <b>Leitner.lv2</b> to <i>~/.lv2</i>. Then rescan plug-ins in your DAW; it appears under <b>FreakiePie</b>. (Building it yourself on macOS or Windows puts the plug-ins in place for you.)</p>
@@ -67,22 +65,35 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 </section>
 
 <section>
-<h2>3. The window <span class="x">xx</span> <span class="de">Das Fenster</span></h2>
+<h2>3. The window: three sheets <span class="x">xx</span> <span class="de">Das Fenster</span></h2>
 <img class="fig" src="../front.jpg">
 <p class="cap">The window from the front, with the Ton-Tor: line 1 rising on the left as line 2 falls on the right.</p>
-<p>The window is mirror symmetrical. In the middle is the <b>room</b>, with the controls of the space under it in two facing columns. On either side is a sheet of the sound program: Cloudfin's effects, the right-hand sheet reversed so that it mirrors the left.</p>
+<p>The window is three typed sheets, mirror symmetrical in their layout. In the middle is the <b>room</b>, with every control of the space under it in two facing columns. On the left is a sheet after <b>Leitner</b>: the figure drawn as an architect would, in plan and elevation. On the right, its mirror, a sheet after <b>Xenakis</b>: what chance is doing. Both side sheets only show; everything is set on the middle sheet.</p>
 <p>It is drawn after Bernhard Leitner's Soundcube sheets of 1969: typed sheets, the room in perspective with its loudspeakers as small circles, the sound as a heavy black line with arrows, a solid black figure standing in it, and typed captions in English and German.</p>
+<div class="two"><div><img class="fig" src="sheet_leitner.png"><p class="cap">The Leitner sheet: the Ton-Tor in plan (from above) and elevation (from the side).</p></div>
+<div><img class="fig" src="sheet_xenakis.png"><p class="cap">The Xenakis sheet after a while with chance 80 %, walk 60 % and the sieve 3/0 + 4/1.</p></div></div>
+<h3>The Leitner sheet: Ton-Raum</h3>
+<table>
+<tr><td>Grundriss, plan</td><td>the room seen from above, the front at the top, you in the middle as head and shoulders. Line 1 black, line 2 red, the loudspeakers each is built from as open circles, and where each is sounding now as filled ones. The small circles round the edge are the walls' loudspeakers.</td></tr>
+<tr><td>Aufriss, elevation</td><td>the same seen from the left side: the front is to the right, the floor at the bottom, you standing. Here you see height: Ton-Tor and Vertikal rise and fall, Ton-Liege lies low along the body.</td></tr>
+<tr><td>the caption</td><td>the figure's name, how many loudspeakers it has, the legato and the length of a pass.</td></tr>
+</table>
+<h3>The Xenakis sheet: stochastic space</h3>
+<table>
+<tr><td>Sieb, sieve</td><td>one circle per loudspeaker of the raster, numbered from the right: filled where the sieve lets it sound, open where it doesn't.</td></tr>
+<tr><td>Zufall, chance</td><td>the length of each of the last 24 passes, as bars (the newest red, on the left). The dashed line is the pass as you set it. With <i>chance</i> at 0 every bar stands on it; turned up, they scatter by the exponential law.</td></tr>
+<tr><td>Irrfahrt, walk</td><td>where the random walk has taken the figure: across, how far it has turned; up, how far it has risen. The trail joins the last passes, the red dot is where it is now.</td></tr>
+<tr><td>the captions</td><td>what <i>walk</i> and <i>scatter</i> are set to, in words.</td></tr>
+</table>
 <h3>Setting a value</h3>
 <table>
 <tr><td>click or drag along a line</td><td>sets the value. The tick is where it is; the number beside the line is its value.</td></tr>
 <tr><td>double-click a line</td><td>puts it back to where it started.</td></tr>
-<tr><td>alt-drag a line</td><td>sets that parameter's <b>drift</b> (Cloudfin's effects only): how far its own random voltage may carry it, either way. It shows as a <span class="red">red stroke</span> under the line, and a <span class="red">red circle</span> shows where the drift has it now.</td></tr>
-<tr><td>alt-double-click</td><td>no drift.</td></tr>
 <tr><td>a name with a line under it and a triangle</td><td>is a list: click it to choose.</td></tr>
 <tr><td>a square</td><td>is a switch: click it.</td></tr>
 </table>
 <h3>Along the bottom of the middle sheet</h3>
-<p><b>hold the lines still</b> stops both lines where they are. Under it is the order the sound program runs in: click a word to move that effect one place earlier. <b>program</b> opens the programs and your own presets (chapter 9) and <b>a random patch</b> sets every control of the sound program somewhere new.</p>
+<p><b>hold the lines still</b> stops both lines where they are. <b>program</b> opens the programs and your own presets (chapter 8), and <b>a random patch</b> makes a new space: a figure, a raster, and some of Xenakis's chance. It leaves the order, the level and <i>hold</i> as they are.</p>
 </section>
 
 <section>
@@ -181,103 +192,52 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 </section>
 
 <section>
-<h2>8. Pulses: Fell, L&aacute;z&aacute;r, Kindohm <span class="x">xx</span> <span class="de">Impulse</span></h2>
-<img class="fig" src="../pulses.jpg">
-<p class="cap">Kreis with pulses: the cell 7 1 1 3, five hits in eight steps, the rate bending upwards, and line 2 playing the pattern backwards.</p>
-<p>With <b>pulse</b> at 0 the lines sound all the time. Turn it up and they are cut into pulses, and each pulse sounds from the one place its line had reached when the pulse began: a point in the room per pulse. The patterns restart at every pass, and nothing counts bars: the timing comes from the rules below. The lower half of each side sheet holds the controls, and the two strips draw each line's pulses over one pass (line 2's runs right to left).</p>
-<h3>Left sheet: the pulse train</h3>
-<table>
-<tr><td>pulse</td><td>how far the lines are cut into pulses: 0 not at all, 100 % silence between them.</td></tr>
-<tr><td>rate</td><td>pulses a second at the middle of a pass, from 0.5 to 400. Low is a rhythm; from about 30 upwards the pulses fuse into a buzzing pitch. (G&aacute;bor L&aacute;z&aacute;r: one pulse train played across that border.)</td></tr>
-<tr><td>bend</td><td>slides the rate over each pass, by up to four octaves: upwards and the pulses rush together into a tone, downwards and a tone falls apart into beats. (L&aacute;z&aacute;r.)</td></tr>
-<tr><td>width</td><td>how much of each gap is sound: thin clicks at one end, nearly joined at the other. (L&aacute;z&aacute;r.)</td></tr>
-<tr><td>cell</td><td>the gaps between pulses, as a short list of unequal lengths that repeats: "7 1 1 3" is a long gap, two short ones and a middling one. <i>rate</i> stays the average. (Mark Fell: rhythm from a few durations in a list, not from dividing a bar.)</td></tr>
+<h2>8. Programs, and your own presets <span class="x">xx</span> <span class="de">Programme</span></h2>
+<p>The <b>program</b> button at the bottom of the middle sheet opens the list: eighteen spaces, eleven after Leitner and seven after Xenakis, and then yours. Choosing a program sets every control of the space except the Ambisonic order, which belongs to your track and stays as you have it.</p>
+<table><tr><th>Program</th><th>The space</th></tr>
+<tr><td colspan="2" style="font-weight:400;color:#8c8880">after Leitner</td></tr>
+<tr><td>Ton-Linie</td><td>a line across the room in eight steps</td></tr>
+<tr><td>Through the Body</td><td>one line through your head, swelling as it nears</td></tr>
+<tr><td>Ton-Tor</td><td>the gate, one line rising as one falls, thinning at the top</td></tr>
+<tr><td>Schwingen</td><td>a smooth pendulum across you</td></tr>
+<tr><td>Ton-Liege</td><td>four points along the body, slow and melting</td></tr>
+<tr><td>Soundcube 1969</td><td>four circles at four heights, 32 points</td></tr>
+<tr><td>Vertical Space</td><td>floor to ceiling in hard steps, the lines opposed</td></tr>
+<tr><td>Spiral Space</td><td>winding up round the body and down, thinning as it rises</td></tr>
+<tr><td>Ton-Würfel</td><td>the cube's eight corners, hard steps, the lines a quarter apart</td></tr>
+<tr><td>Widening, Narrowing</td><td>out from the centre to left and right, and back</td></tr>
+<tr><td>Vault</td><td>a slow vault overhead in a long room</td></tr>
+<tr><td colspan="2" style="font-weight:400;color:#8c8880">after Xenakis</td></tr>
+<tr><td>Ruled Surface</td><td>the paraboloid, two families of straight lines</td></tr>
+<tr><td>Terretektorh</td><td>the accelerating spiral, the lines a quarter apart</td></tr>
+<tr><td>Polytope</td><td>points by chance, scattered, with rests</td></tr>
+<tr><td>Persephassa</td><td>six points round you, the sound circling (the six percussionists round the audience of Persephassa, 1969)</td></tr>
+<tr><td>Nomos Gamma</td><td>a scattered cloud that wanders (the orchestra spread among the listeners of Nomos Gamma, 1968)</td></tr>
+<tr><td>Sieve Ring</td><td>a ring through the sieve 3/0 + 4/1, by chance</td></tr>
+<tr><td>Brownian Line</td><td>one line on a random walk</td></tr>
 </table>
-<h3>Right sheet: the pattern</h3>
-<table>
-<tr><td>rotate</td><td>at every pass the cell starts this many steps further on, so the same few gaps keep landing in different places. (Fell.)</td></tr>
-<tr><td>hits, steps</td><td>a Euclidean pattern: of every <i>steps</i> pulses only <i>hits</i> sound, spread as evenly as they will go. 3 in 8, 5 in 8, 7 in 16. (Kindohm, from TidalCycles.)</td></tr>
-<tr><td>drop</td><td>the chance that a pulse is left out, different every pass. (Tidal's degradeBy.)</td></tr>
-<tr><td>jux</td><td>what line 2 does with the pattern while line 1 plays it straight: the same, backwards, turned (started half way round), twice as fast, or half as fast. (Tidal's jux: one side plays the pattern changed.)</td></tr>
-</table>
-<h3>Things to try</h3>
-<ul>
-<li><b>Kreis</b>, 8 points, pulse 100 %, rate 9, cell 3 1 2, rotate 1: a ring of clicks whose accent walks round you.</li>
-<li><b>Ton-Linie</b>, continuous, pulse 100 %, rate 30, bend +4 oct, width 20 %: each pass begins as separate ticks and ends as a pitch on the far wall.</li>
-<li><b>Polytope</b>, hits 5, steps 8, drop 30 %, jux backwards, chance 80 %: two broken patterns answering each other from points all over the sphere.</li>
-<li><b>Soundcube</b>, cell 7 1 1 3, jux twice as fast: line 2 runs the same figure of gaps at double speed against line 1.</li>
-</ul>
-</section>
-
-<section>
-<h2>9. Programs, and your own presets <span class="x">xx</span> <span class="de">Programme</span></h2>
-<p>The <b>program</b> button at the bottom of the middle sheet opens the list. It has four parts.</p>
-<h3>Leitner's programs</h3>
-<p>Eighteen programs, each a space with one of Cloudfin's sounds under it. Choosing one sets everything except the Ambisonic order, which belongs to your track and stays as you have it.</p>
-<table><tr><th>Program</th><th>The space</th><th>The sound under it</th></tr>
-<tr><td>Ton-Linie</td><td>a line across the room in eight steps</td><td>Cloudfin</td></tr>
-<tr><td>Through the Body</td><td>one line through your head, swelling as it nears</td><td>Clear Water</td></tr>
-<tr><td>Ton-Tor</td><td>the gate, one line rising as one falls, thinning at the top</td><td>Vowel Drift</td></tr>
-<tr><td>Schwingen</td><td>a smooth pendulum across you</td><td>Slow Tide</td></tr>
-<tr><td>Ton-Liege</td><td>four points along the body, slow and melting</td><td>Deep Hydrophone</td></tr>
-<tr><td>Soundcube 1969</td><td>four circles at four heights, 32 points</td><td>Glass Stretch</td></tr>
-<tr><td>Vertical Space</td><td>floor to ceiling in hard steps, the lines opposed</td><td>Yaman Shimmer</td></tr>
-<tr><td>Widening, Narrowing</td><td>out from the centre to left and right, and back</td><td>Bloom Loop</td></tr>
-<tr><td>Vault</td><td>a slow vault overhead in a long room</td><td>Underwater Room</td></tr>
-<tr><td>Ruled Surface</td><td>the paraboloid, two families of straight lines</td><td>Harmonic Fountain</td></tr>
-<tr><td>Terretektorh</td><td>the accelerating spiral, the lines a quarter apart</td><td>Spectral Snow</td></tr>
-<tr><td>Polytope</td><td>points by chance, scattered, with rests</td><td>Pelog Echoes</td></tr>
-<tr><td>Sieve Ring</td><td>a ring through the sieve 3/0 + 4/1, by chance</td><td>Maqam Mist</td></tr>
-<tr><td>Brownian Line</td><td>one line on a random walk</td><td>Tritave Choir</td></tr>
-<tr><td>Walking Accent</td><td>a ring of pulses, the cell 3 1 2 rotating</td><td>Clear Water</td></tr>
-<tr><td>Rhythm Into Pitch</td><td>pulses bending up four octaves along a line</td><td>Cloudfin</td></tr>
-<tr><td>Five in Eight</td><td>the cube's corners, 5 hits in 8, line 2 twice as fast</td><td>Pelog Echoes</td></tr>
-<tr><td>Broken Pattern</td><td>a polytope of pulses with drops, line 2 backwards</td><td>Spectral Snow</td></tr>
-</table>
-<h3>Sound only</h3>
-<p>Under those are Cloudfin's own programs. They change the sound program and leave the space exactly as you have it, so you can try one space with many sounds.</p>
 <h3>Yours</h3>
-<p><b>save this as a preset...</b> keeps everything as it is now (the space, the sound program, the order of the effects, the drifts) in a file with the name you give it. Your presets then appear in the list under <i>yours</i>. <b>show the presets folder</b> opens the folder: they are ordinary files ending in <i>.leitner</i>, so you can copy them to another computer, rename them or delete them there.</p>
+<p><b>save this as a preset...</b> keeps the space as it is now in a file with the name you give it. Your presets then appear in the list under <i>yours</i>. <b>show the presets folder</b> opens the folder: they are ordinary files ending in <i>.leitner</i>, so you can copy them to another computer, rename them or delete them there.</p>
 <table>
 <tr><td>macOS</td><td>~/Library/Application Support/FreakiePie/Leitner/Presets</td></tr>
 <tr><td>Windows</td><td>%APPDATA%\FreakiePie\Leitner\Presets</td></tr>
 <tr><td>Linux</td><td>~/.config/FreakiePie/Leitner/Presets</td></tr>
 </table>
-<p>A preset remembers the Ambisonic order it was saved with. Everything is also saved with your DAW session as usual, whether or not you make a preset of it.</p>
+<p>A preset remembers the Ambisonic order it was saved with. Everything is also saved with your DAW session as usual, whether or not you make a preset of it. Sessions and presets from Leitner 0.2 open with their space; the effects they had are no longer part of Leitner.</p>
 </section>
 
 <section>
-<h2>10. The sound program: Cloudfin's effects <span class="x">xx</span> <span class="de">Ton-Programm</span></h2>
-<p>Leitner kept two layers apart: the space program (where the sound goes) and the sound program (what the sound is). The side sheets are the sound program, and it is Cloudfin: seven effects one after another, in any order, with a feedback loop round them. Each has a <b>mix</b>; an effect with its mix at 0 is out of the way. The number beside each heading is its place in the order.</p>
-<h3>Spectral smear</h3>
-<p>The sound is split into hundreds of frequency bins. Below the <b>cutoff</b> each bin fades, and whatever gets through rings on for the <b>smear</b> time. <b>Attack</b> is how quickly an opening bin swells, <b>knee</b> how gently the bins under the cutoff fade. <b>Blur</b> smooths the spectrum across neighbouring bins, <b>scatter</b> throws the phases about until tones turn to breath, and <b>tilt</b> leans it darker or brighter. <b>Spectral freeze</b> holds the spectrum as it is.</p>
-<h3>Pitch</h3>
-<p><b>Shift</b> moves the sound up or down, snapped to the <b>scale</b>. <b>Grain</b> is the size of the shifter's window (short is glassy, long is smooth) and <b>feedback</b> sends the shifted sound round again, so it climbs or falls a step at a time.</p>
-<h3>Formant</h3>
-<p>A singing throat. <b>Vowel</b> glides through a, e, i, o, u; <b>shift</b> moves the throat without changing the pitch; <b>resonance</b> sharpens the vowel.</p>
-<h3>JI delay</h3>
-<p>A stereo delay with three taps a side, tuned in just intonation to the note the pitch shifter lands on. <b>Time</b> scales them all, <b>feedback</b> sets how long they repeat and <b>tone</b> darkens them. Its left taps travel on line 1 and its right taps on line 2.</p>
-<h3>Reverb</h3>
-<p>Cloudfin's own stereo reverb, inside the sound program: <b>decay</b>, and <b>tone</b> from dark to airy. It travels along the lines with everything else. (The <i>room</i> under the drawing is a different reverb: it surrounds you and stays still.)</p>
-<h3>Grains</h3>
-<p>The last four seconds are kept on a live tape and played back as grains. <b>Size</b> and <b>density</b> set how long each is and how many overlap; <b>position</b> where on the tape they read and <b>spray</b> how far they scatter round it. <b>Rand pan</b> spreads them between the two lines, <b>reverse</b> flips some backwards, <b>octave</b> moves them up or down. <b>Freeze the grains</b> holds the tape still, over the <b>freeze fade</b> time. <b>Random octave</b> lets each grain choose, and <b>grain shape</b> picks the envelope of a grain.</p>
-<h3>Compander</h3>
-<p>A compressor that can also lift quiet sounds: <b>threshold</b>, <b>ratio</b>, <b>makeup</b>, and its times, <b>attack</b> and <b>release</b>. <b>Below</b> acts on everything under the threshold: lift it and quiet tails swell (which makes feedback bloom), sink it and the sound dries out.</p>
-<h3>Loop, drift and water</h3>
-<p><b>Feedback</b> takes the end of the chain back to its start, so the whole thing can ring on by itself; it is tamed so it sings without blowing up. <b>Drift rate</b> and <b>drift slew</b> set how fast and how smoothly every parameter's random voltage wanders (give a parameter some drift with alt-drag). <b>Hydrophone</b> is a recording of moving water, and <b>goes to</b> sends it into the input of the effects or onto their output.</p>
-</section>
-
-<section>
-<h2>11. Starting points <span class="x">xx</span> <span class="de">Anfänge</span></h2>
+<h2>9. Starting points <span class="x">xx</span> <span class="de">Anfänge</span></h2>
 <table>
 <tr><th>For</th><th>Set</th></tr>
-<tr><td>hearing the lines plainly</td><td>all seven mixes to 0, room 0, Ton-Linie, 8 points, legato 0. Play something steady: you will hear it switched from loudspeaker to loudspeaker.</td></tr>
-<tr><td>a slow enveloping space</td><td>Wölbung, continuous, pass 20 s, room 40 %, decay 8 s, smear mix 50 %.</td></tr>
+<tr><td>hearing the lines plainly</td><td>room 0, Ton-Linie, 8 points, legato 0. Play something steady: you will hear it switched from loudspeaker to loudspeaker.</td></tr>
+<tr><td>a slow enveloping space</td><td>Wölbung, continuous, pass 20 s, room 40 %, decay 8 s.</td></tr>
 <tr><td>a sound through the body</td><td>Ton-Linie, height 0, apart 0, swell 80 %, pass 3 s.</td></tr>
 <tr><td>rising and falling</td><td>Ton-Tor or Vertikal, counter 100 %, lift 70 %.</td></tr>
-<tr><td>an unpredictable field</td><td>Polytope, chance 100 %, scatter 40 %, grains mix 60 %, rest 20 %.</td></tr>
+<tr><td>an unpredictable field</td><td>Polytope, chance 100 %, scatter 40 %, rest 20 %.</td></tr>
+<tr><td>a limping ring</td><td>Kreis, 16 points, legato 0, sieve 3/0 + 4/1, chance 60 %.</td></tr>
 </table>
-<h2 style="margin-top:12mm">12. If something seems wrong <span class="x">xx</span> <span class="de">Hilfe</span></h2>
+<h2 style="margin-top:12mm">10. If something seems wrong <span class="x">xx</span> <span class="de">Hilfe</span></h2>
 <table>
 <tr><td>I only hear plain stereo</td><td>The track has two channels. Give it 16 or more and put a decoder after Leitner. The line under the title says what is coming out.</td></tr>
 <tr><td>It sounds phasey or hollow</td><td>The decoder is not set to the same order, or expects a different normalisation. Use SN3D (AmbiX) and match the order.</td></tr>
@@ -286,14 +246,15 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <tr><td>Clicks as the line moves</td><td><i>legato</i> at 0 switches hard on purpose. Turn it up.</td></tr>
 <tr><td>Scatter does nothing</td><td><i>points</i> is at continuous. Scatter moves the raster's loudspeakers, so it needs a raster.</td></tr>
 <tr><td>The room drawing is at an odd angle</td><td>Double-click it.</td></tr>
-<tr><td>The level dips on loud passages</td><td>Leitner has a ceiling on its output: if the scene would pass full scale, every channel is turned down together for a moment. Lower <i>level</i>, or the feedback in the sound program.</td></tr>
+<tr><td>The level dips on loud passages</td><td>Leitner has a ceiling on its output: if the scene would pass full scale, every channel is turned down together for a moment. Lower <i>level</i>, or the level going in.</td></tr>
+<tr><td>Where are the effects?</td><td>Leitner 0.3 is a spatializer only: the effects it carried from Cloudfin (and the pulses) are gone. Put any effect on the track before Leitner, or use Cloudfin itself.</td></tr>
 <tr><td>The type looks different on Windows or Linux</td><td>The window is set in American Typewriter on macOS. Elsewhere it uses Courier New (Windows) or the system's monospaced face (Linux); everything else is the same.</td></tr>
 <tr><td>High CPU</td><td>7th order with the room on is the heaviest setting. Lower the order, or turn <i>room</i> to 0.</td></tr>
 </table>
 </section>
 
 <section>
-<h2>13. Every parameter <span class="x">xx</span> <span class="de">Alle Parameter</span></h2>
+<h2>11. Every parameter <span class="x">xx</span> <span class="de">Alle Parameter</span></h2>
 <h3>The space</h3>
 <table><tr><th>Name</th><th>Range</th><th>Default</th></tr>
 <tr><td>order</td><td>3rd, 4th, 5th, 6th, 7th</td><td>3rd</td></tr>
@@ -310,45 +271,32 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <tr><td>swell, lift</td><td>0 to 100 %</td><td>0 %</td></tr>
 <tr><td>chance, walk, scatter</td><td>0 to 100 %</td><td>0 %</td></tr>
 <tr><td>sieve</td><td>five sieves</td><td>every point</td></tr>
-<tr><td>pulse</td><td>0 to 100 %</td><td>0 %</td></tr>
-<tr><td>rate</td><td>0.5 to 400 Hz</td><td>8 Hz</td></tr>
-<tr><td>bend</td><td>-4 to +4 octaves</td><td>0</td></tr>
-<tr><td>width</td><td>2 to 100 %</td><td>50 %</td></tr>
-<tr><td>cell</td><td>eight cells</td><td>even</td></tr>
-<tr><td>rotate</td><td>0 to 4</td><td>0</td></tr>
-<tr><td>hits, steps</td><td>1 to 16</td><td>8, 8</td></tr>
-<tr><td>drop</td><td>0 to 100 %</td><td>0 %</td></tr>
-<tr><td>jux</td><td>five ways</td><td>the same</td></tr>
 <tr><td>room</td><td>0 to 100 %</td><td>15 %</td></tr>
 <tr><td>decay</td><td>0.3 to 20 s</td><td>3 s</td></tr>
 <tr><td>level</td><td>0 to 150 %</td><td>100 %</td></tr>
 <tr><td>hold</td><td>off, on</td><td>off</td></tr></table>
-<p>All of these, and all of Cloudfin's, can be automated from your DAW. The sound program's parameters, ranges and presets are Cloudfin's: see Cloudfin's own help for their exact ranges.</p>
-<h3>Not in Leitner</h3>
-<p>Three things Cloudfin has that Leitner leaves out: drawing your own grain shape (Leitner offers the five ready shapes), the gravity toy, and the day, dusk and night looks.</p>
+<p>All of these can be automated from your DAW.</p>
 </section>
 
 <section>
-<h2>14. Sources and credits <span class="x">xx</span> <span class="de">Quellen</span></h2>
-<p>Leitner is an homage. It is not affiliated with or endorsed by Bernhard Leitner, the estate of Iannis Xenakis, Mark Fell, G&aacute;bor L&aacute;z&aacute;r or Kindohm, and it contains no drawing, recording, score or text of theirs.</p>
+<h2>12. Sources and credits <span class="x">xx</span> <span class="de">Quellen</span></h2>
+<p>Leitner is an homage. It is not affiliated with or endorsed by Bernhard Leitner or the estate of Iannis Xenakis, and it contains no drawing, recording, score or text of theirs.</p>
 <h3>Bernhard Leitner</h3>
 <ul>
 <li><i>P.U.L.S.E.</i>, Hatje Cantz / ZKM, 2008, which reprints his Sound Space Manifesto of 1977 and the Soundcube sheets of 1969.</li>
 <li>Sven Sterken, "Architecture without Walls: Bernhard Leitner's Soundcube", 2024.</li>
 <li>Bernhard Leitner, lecture "Sound Spaces", 2011, and the list of works at bernhardleitner.at.</li>
 </ul>
-<p>From these: the line of sound as a sequence of points, sound switched from loudspeaker to loudspeaker, the figures in chapter 6, the crescendo of an approaching sound and the decrescendo of a rising one, the separation of space program and sound program, and the look of the sheets. The Soundcube project had 64 loudspeakers on each of its six walls; the drawing here shows 25 a wall, for legibility.</p>
+<p>From these: the line of sound as a sequence of points, sound switched from loudspeaker to loudspeaker, the figures in chapter 6, the crescendo of an approaching sound and the decrescendo of a rising one, the separation of space program and sound program (Leitner is only the space program), and the look of the sheets, including the plan and elevation. The Soundcube project had 64 loudspeakers on each of its six walls; the drawing here shows 25 a wall, for legibility.</p>
 <h3>Iannis Xenakis</h3>
 <ul>
 <li><i>Formalized Music</i> (stochastic laws for durations and clouds of points, random walks, sieves).</li>
-<li>Metastaseis and the Philips Pavilion (straight lines generating ruled surfaces); Terretektorh (accelerating rotations of sound round the listener); the Polytopes (points of light and sound in space).</li>
+<li>Metastaseis and the Philips Pavilion (straight lines generating ruled surfaces); Terretektorh (accelerating rotations of sound round the listener); Persephassa (six percussionists round the audience); Nomos Gamma (the orchestra spread among the listeners); the Polytopes (points of light and sound in space).</li>
 </ul>
 <p>These were written from general knowledge of his work, not checked against the scores: the three Xenakis figures are interpretations, not reconstructions.</p>
-<h3>Mark Fell, G&aacute;bor L&aacute;z&aacute;r, Kindohm</h3>
-<p>The pulse layer takes three ideas: Fell's rhythms built from short lists of durations and their rotation; L&aacute;z&aacute;r's single pulse train whose rate and width are played across the border between rhythm and pitch; and the rule-made patterns of Kindohm's live coding in TidalCycles (Euclidean rhythms, random dropping, and jux). These were written from general knowledge of their music and of TidalCycles, not from their own patches or code, and none of them is affiliated with this plug-in.</p>
 <h3>Ambisonics</h3>
 <p>The conventions (ACN, SN3D, x ahead, y to the left, z up) follow the IEM Plug-in Suite and SPARTA. The room is built like the IEM FdnReverb. The Ambisonics code is shared with Pinkie Pie's Balloon Palace. No code from IEM or SPARTA is included.</p>
 <h3>Licence</h3>
-<p>GNU Affero General Public License v3, as Cloudfin. Built with JUCE.</p>
+<p>GNU Affero General Public License v3. Built with JUCE. Leitner began inside Cloudfin's repository; since 0.3 it is its own plug-in, at github.com/femifleming/Leitner.</p>
 </section>
 </body></html>

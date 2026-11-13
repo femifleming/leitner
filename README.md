@@ -1,12 +1,12 @@
 # Leitner
 
-Cloudfin as a sound space. Leitner is the Ambisonics version of [Cloudfin](../README.md), kept in Cloudfin's repository (this folder): the same seven effects, drift and presets, followed by a spatial stage that sends the sound through the room as two lines, after the Ton-Raum work of Bernhard Leitner, with chance, random walks, clouds of points and sieves after Iannis Xenakis, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm.
+A spatialization plug-in after **Bernhard Leitner** and **Iannis Xenakis**. The sound you give it travels through the room round the listener as two lines of sound, after Leitner's Ton-Raum work: switched from loudspeaker to loudspeaker, drawing figures he built and drew, with the chance, random walks, clouds of points and sieves of Xenakis. It does not change the sound itself: it only says where the sound is.
 
 ![Leitner](docs/screenshot.jpg)
 
 **[The manual (PDF)](docs/manual/Leitner%20Manual.pdf)**
 
-It is an **encoder**: stereo goes in, Ambisonics come out (ACN channel order, SN3D normalisation, the format of the IEM and SPARTA plug-ins), 3rd to 7th order. It decodes nothing itself.
+It is an **encoder**: stereo (or mono) goes in, Ambisonics come out (ACN channel order, SN3D normalisation, the format of the IEM and SPARTA plug-ins), 3rd to 7th order. It decodes nothing itself.
 
 | Order | Channels |
 | --- | --- |
@@ -16,17 +16,33 @@ It is an **encoder**: stereo goes in, Ambisonics come out (ACN channel order, SN
 | 6th | 49 |
 | 7th | 64 |
 
+AU, VST3 and app on macOS; VST3 and app on Windows; VST3, LV2 and app on Linux.
+
+## Install
+
+**macOS (Homebrew):**
+
+```sh
+brew tap femifleming/tap
+brew trust --tap femifleming/tap
+brew install --cask femifleming/tap/leitner
+```
+
+Or download `Leitner-macOS.zip`, `Leitner-Windows.zip` or `Leitner-Linux.tar.gz` from the [releases](https://github.com/femifleming/Leitner/releases) and copy the plug-ins into your plug-in folders (the manual lists them). The builds are signed but not notarised: on macOS, the Homebrew cask clears the download quarantine for you.
+
 ## Routing it to a decoder
 
 1. Put Leitner on a track and give the track as many channels as the order needs (in REAPER: the track's **Route** button, *Track channels*).
-2. Pick the same order in Leitner (**order**, bottom of the left sheet).
+2. Pick the same order in Leitner (**order**, under the room).
 3. After it, add a decoder at that order with SN3D normalisation, such as the IEM **AllRADecoder** for loudspeakers or **BinauralDecoder** for headphones.
 
-On a track with too few channels for the order you picked, the highest order that fits comes out, and the top of the left sheet says which. On a plain stereo track only a left-right fold of the scene comes out, for checking.
+On a track with too few channels for the order you picked, the highest order that fits comes out, and the line under the title says which. On a plain stereo track only a left-right fold of the scene comes out, for checking.
 
 ## The space
 
 The left channel is line 1 (black in the drawing) and the right channel is line 2 (red), its mirror image. Nothing counts bars or beats: time is in seconds, and chance can make every pass a different length.
+
+After Leitner:
 
 - **figure**: which space the lines draw (the list is below).
 - **pass**, **rest**: how long one pass takes, and how much of it is spent waiting at its end.
@@ -34,16 +50,31 @@ The left channel is line 1 (black in the drawing) and the right channel is line 
 - **size**, **height**, **turn**: how big the figure is, how high it sits (0 is ear height) and which way it faces.
 - **apart**, **counter**: how far the two lines stand either side of the figure's direction, and how far line 2 runs behind line 1 (100 %: exactly opposite).
 - **swell**: louder where the line comes nearest the body. **lift**: thinner as it rises, fuller as it falls.
-- **chance**: each pass's length is drawn from an exponential law. **walk**: at every pass the figure takes a Gaussian step in direction and height. **scatter**: each loudspeaker of the raster is thrown off the line, so the line becomes a cloud of points. **sieve**: which loudspeakers of the raster sound at all (unions of residue classes).
-- **pulse**, **rate**, **bend**, **width**, **cell**: cut the lines into pulses, each sounding from the one place its line had reached. *rate* runs from rhythm into pitch and *bend* slides it over each pass (after Gábor Lázár); *cell* sets the gaps from a short list of unequal lengths (after Mark Fell).
-- **rotate**, **hits**, **steps**, **drop**, **jux**: the cell moves on a step each pass (Fell); a Euclidean pattern, pulses left out by chance, and line 2 playing the pattern backwards, turned, or at twice or half the speed (after Kindohm and TidalCycles).
-- **room**, **decay**: one reverb for the whole sphere. **level**: the output. **hold**: stop the lines where they are.
+
+After Xenakis:
+
+- **chance**: each pass's length is drawn from an exponential law, as the durations of his stochastic music were.
+- **walk**: at every pass the figure takes a Gaussian step in direction and height (a random walk).
+- **scatter**: each loudspeaker of the raster is thrown off the line, so the line becomes a cloud of points.
+- **sieve**: which loudspeakers of the raster sound at all (unions of residue classes).
+
+And **room**, **decay** (one reverb for the whole sphere, the architecture round the lines), **level**, **order** and **hold** (stop the lines where they are).
 
 A line can pass through the middle of the room: near the centre the higher orders fade, so the sound spreads round you and then leaves on the other side.
 
+## The window
+
+Three typed sheets after Leitner's 1969 Soundcube sheets, mirror symmetrical in their layout:
+
+- **in the middle**, the room in perspective with its loudspeakers as small circles, the two lines of sound with arrows and a solid black figure standing in it, and every control of the space under it in two facing columns. **Drag the room to turn it**; double-click it to face front again.
+- **on the left, Ton-Raum**: the figure drawn as an architect draws a building, in plan (from above) and elevation (from the side), with its loudspeakers and where each line is sounding now.
+- **on the right, its mirror, stochastic space**: the sieve (which loudspeakers sound), the length chance gave each of the last passes, and the trail of the random walk.
+
+Every parameter is a ruled line with a tick: click or drag along it, double-click to put it back. The red of line 2 is after the red rods of Leitner's Plexiglas models.
+
 ## Programs and your own presets
 
-The **program** button lists Leitner's eighteen programs (each a space with one of Cloudfin's sounds under it; they leave the Ambisonic order alone), then Cloudfin's programs, which change only the sound and leave the space as you have it, then your own. **save this as a preset...** writes everything to a `.leitner` file in your presets folder (`~/Library/Application Support/FreakiePie/Leitner/Presets` on macOS, `%APPDATA%\FreakiePie\Leitner\Presets` on Windows, `~/.config/FreakiePie/Leitner/Presets` on Linux), and **show the presets folder** opens it.
+The **program** button lists eighteen spaces, eleven after Leitner and seven after Xenakis (among them **Persephassa**, six points round you, and **Nomos Gamma**, a scattered cloud that wanders). They leave the Ambisonic order alone. **save this as a preset...** writes the space to a `.leitner` file in your presets folder (`~/Library/Application Support/FreakiePie/Leitner/Presets` on macOS, `%APPDATA%\FreakiePie\Leitner\Presets` on Windows, `~/.config/FreakiePie/Leitner/Presets` on Linux), and **a random patch** makes a new space.
 
 ## The figures, and where they come from
 
@@ -64,31 +95,25 @@ The **program** button lists Leitner's eighteen programs (each a space with one 
 | Terretektorh | a flat spiral in towards you, faster and faster, and out again | Xenakis: the accelerating rotations of sound in Terretektorh |
 | Polytope | eight points thrown over the sphere, new ones every pass | Xenakis: the points of light and sound of the Polytopes |
 
-## The window
-
-It is mirror symmetrical: the room in the middle with the space's controls under it in two facing columns, and a sheet of Cloudfin's sound program either side, the right one reversed. It is drawn after Leitner's 1969 Soundcube sheets: typed sheets, the room in perspective with loudspeakers as small circles on every wall, the sound as a heavy black line with arrows, a solid black figure standing in it. The red of line 2 is after the red rods of his Plexiglas models.
-
-**Drag the room to turn it** and see where things are from any side; double-click it to face front again. Every parameter is a ruled line with a tick: click or drag along it, double-click to put it back. Alt-drag a Cloudfin parameter to set its drift (the red stroke), and a red circle shows where the drift has it now.
-
-## Windows and Linux
-
-Leitner builds as a VST3 and a standalone app on Windows, and as a VST3, an LV2 and a standalone app on Linux; the repository's build workflow makes all three systems' packages. The window is set in American Typewriter on macOS, Courier New on Windows and the system's monospaced face on Linux.
-
 ## Build
 
 ```sh
+git clone --recursive https://github.com/femifleming/Leitner.git
 cd Leitner
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target Leitner_All
 ```
 
-`-DLEITNER_BUILD_TESTS=ON` adds `LeitnerTest`, which checks the harmonics, the encoded directions, the mirror image, the raster, the sieves, chance and every order, and that the window mirrors.
+`-DLEITNER_BUILD_TESTS=ON` adds `LeitnerTest`, which checks the harmonics, the encoded directions, the mirror image, the raster, the sieves, chance, every order, that the sound passes unchanged, the programs, presets and old sessions, and takes pictures of the window. On Linux, install JUCE's usual dependencies first (ALSA, FreeType, fontconfig, X11, OpenGL; see the build workflow).
+
+## History
+
+Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/Cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space.
 
 ## Credits and notes
 
 - This is an homage. It is not affiliated with or endorsed by Bernhard Leitner or the estate of Iannis Xenakis; no drawing, recording, score or text of theirs is included.
-- The pulse layer was written from general knowledge of Mark Fell's, Gábor Lázár's and Kindohm's music and of TidalCycles, not from their patches or code; none of them is affiliated with this plug-in.
-- The Xenakis ideas (stochastic durations, random walks, clouds of points, sieves; Metastaseis and the Philips Pavilion, Terretektorh, the Polytopes) were written from general knowledge of his work and *Formalized Music*, not checked against the scores: the three figures are interpretations.
+- The Xenakis ideas (stochastic durations, random walks, clouds of points, sieves; Metastaseis and the Philips Pavilion, Terretektorh, Persephassa, Nomos Gamma, the Polytopes) were written from general knowledge of his work and *Formalized Music*, not checked against the scores: the three figures are interpretations.
 - Sources for the figures and the drawing style: *P.U.L.S.E.* (Hatje Cantz / ZKM, 2008), which reprints his 1977 Sound Space Manifesto and the Soundcube sheets; Sven Sterken, "Architecture without Walls: Bernhard Leitner's Soundcube" (2024); his 2011 lecture "Sound Spaces"; and the work list at bernhardleitner.at.
 - The Ambisonic conventions follow the IEM Plug-in Suite and SPARTA, and the room is built like the IEM FdnReverb, as in Pinkie Pie's Balloon Palace, whose Ambisonics code this shares. No code from IEM or SPARTA is included.
-- Licence: AGPL v3, as Cloudfin.
+- Licence: AGPL v3. Built with JUCE.

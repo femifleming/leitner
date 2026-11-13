@@ -3,19 +3,7 @@
 
 using namespace juce;
 
-// Stereo in; out, Ambisonics. As an Audio Unit and in the desktop app 3rd order (16 channels) is
-// published; everywhere else up to 7th (64), so a track with that many has room for it. The order
-// setting says how many are used.
-AudioProcessor::BusesProperties LeitnerProcessor::buses()
-{
-    const auto t = PluginHostType::getPluginLoadedAs();
-    const bool third = t == AudioProcessor::wrapperType_AudioUnit || t == AudioProcessor::wrapperType_Standalone;
-    return BusesProperties()
-        .withInput  ("Input",  AudioChannelSet::stereo(), true)
-        .withOutput ("Output", AudioChannelSet::ambisonic (third ? 3 : 7), true);
-}
-
-LeitnerProcessor::LeitnerProcessor() : CloudfinProcessor (buses())
+LeitnerProcessor::LeitnerProcessor() : AudioProcessor (buses())
 {
     auto secs = [] (float v, int) { return v < 1.0f ? String (roundToInt (v * 1000.0f)) + " ms" : String (v, 2) + " s"; };
     auto pct  = [] (float v, int) { return String (roundToInt (v * 100.0f)) + " %"; };
@@ -62,27 +50,6 @@ LeitnerProcessor::LeitnerProcessor() : CloudfinProcessor (buses())
         auto p = std::make_unique<AudioParameterChoice> (ParameterID { "spSieve", 1 }, "Sieve", names, 0);
         sieve = p.get(); spaceParams.push_back (sieve); addParameter (p.release());
     }
-    f (pulse,      "spPulse",      "Pulse",       { 0.0f, 1.0f }, 0.0f, A().withStringFromValueFunction (pct));
-    f (pulseRate,  "spPulseRate",  "Pulse Rate",  skew (0.5f, 400.0f, 12.0f), 8.0f, A().withStringFromValueFunction ([] (float v, int) { return String (v, v < 10.0f ? 2 : 1) + " Hz"; }));
-    f (pulseBend,  "spPulseBend",  "Pulse Bend",  { -1.0f, 1.0f }, 0.0f, A().withStringFromValueFunction ([] (float v, int) { return (v > 0.004f ? "+" : "") + String (v * 4.0f, 1) + " oct"; }));
-    f (pulseWidth, "spPulseWidth", "Pulse Width", { 0.02f, 1.0f }, 0.5f, A().withStringFromValueFunction (pct));
-    f (drop,       "spDrop",       "Drop",        { 0.0f, 1.0f }, 0.0f, A().withStringFromValueFunction (pct));
-    auto ch = [this] (AudioParameterChoice*& slot, const char* id, const char* name, const char* const* names, int n)
-    {
-        StringArray list; for (int i = 0; i < n; ++i) list.add (names[i]);
-        auto p = std::make_unique<AudioParameterChoice> (ParameterID { id, 1 }, name, list, 0);
-        slot = p.get(); spaceParams.push_back (slot); addParameter (p.release());
-    };
-    auto in = [this] (AudioParameterInt*& slot, const char* id, const char* name, int lo, int hi, int def)
-    {
-        auto p = std::make_unique<AudioParameterInt> (ParameterID { id, 1 }, name, lo, hi, def);
-        slot = p.get(); spaceParams.push_back (slot); addParameter (p.release());
-    };
-    ch (cell, "spCell", "Cell", leitner::cellNames(), leitner::kNumCells);
-    ch (jux,  "spJux",  "Jux",  leitner::juxNames(), leitner::kNumJux);
-    in (rotate, "spRotate", "Rotate", 0, 4, 0);
-    in (hits,   "spHits",   "Hits",   1, 16, 8);
-    in (steps,  "spSteps",  "Steps",  1, 16, 8);
     f (room,    "spRoom",    "Room",     { 0.0f, 1.0f }, 0.15f, A().withStringFromValueFunction (pct));
     f (roomDecay, "spRoomDecay", "Room Decay", skew (0.3f, 20.0f, 3.0f), 3.0f, A().withStringFromValueFunction (secs));
     f (level,   "spLevel",   "Level",    { 0.0f, 1.5f }, 1.0f, A().withStringFromValueFunction (pct));
@@ -96,7 +63,7 @@ LeitnerProcessor::LeitnerProcessor() : CloudfinProcessor (buses())
 namespace
 {
 struct SpaceValue { const char* id; float v; };
-struct SpaceProgram { const char* name; const char* group; const char* sound; std::vector<SpaceValue> space; };
+struct SpaceProgram { const char* name; const char* group; std::vector<SpaceValue> space; };
 
 // figures by number, as in leitner::Figure
 enum { Line = 0, Swing, Liege, Gate, Vertical, Circle, Soundcube, Spiral, Cube, Expand, Vault, Paraboloid, Terretektorh, Polytope };
@@ -105,72 +72,94 @@ const std::vector<SpaceProgram>& spacePrograms()
 {
     static const std::vector<SpaceProgram> list {
         // after Leitner
-        { "Ton-Linie",           "Leitner", "Cloudfin",        {} },
-        { "Through the Body",    "Leitner", "Clear Water",     { { "spFigure", Line }, { "spHeight", 0.0f }, { "spApart", 0.0f }, { "spSwell", 0.8f }, { "spSeconds", 3.0f }, { "spPoints", 12 }, { "spLegato", 0.7f } } },
-        { "Ton-Tor",             "Leitner", "Vowel Drift",     { { "spFigure", Gate }, { "spCounter", 1.0f }, { "spLift", 0.7f }, { "spSeconds", 5.0f }, { "spPoints", 19 }, { "spLegato", 0.3f }, { "spApart", 20.0f } } },
-        { "Schwingen",           "Leitner", "Slow Tide",       { { "spFigure", Swing }, { "spPoints", 33 }, { "spSeconds", 5.0f }, { "spRoom", 0.3f }, { "spApart", 15.0f } } },
-        { "Ton-Liege",           "Leitner", "Deep Hydrophone", { { "spFigure", Liege }, { "spPoints", 4 }, { "spLegato", 1.0f }, { "spSeconds", 9.0f }, { "spApart", 10.0f }, { "spSwell", 0.4f } } },
-        { "Soundcube 1969",      "Leitner", "Glass Stretch",   { { "spFigure", Soundcube }, { "spPoints", 32 }, { "spLegato", 0.2f }, { "spSeconds", 14.0f }, { "spRoom", 0.1f } } },
-        { "Vertical Space",      "Leitner", "Yaman Shimmer",   { { "spFigure", Vertical }, { "spCounter", 1.0f }, { "spLift", 0.6f }, { "spPoints", 6 }, { "spLegato", 0.1f }, { "spSeconds", 2.5f }, { "spApart", 45.0f } } },
-        { "Widening, Narrowing", "Leitner", "Bloom Loop",      { { "spFigure", Expand }, { "spApart", 90.0f }, { "spPoints", 33 }, { "spSeconds", 7.0f }, { "spSwell", 0.3f }, { "spLevel", 0.8f } } },
-        { "Vault",               "Leitner", "Underwater Room", { { "spFigure", Vault }, { "spPoints", 33 }, { "spSeconds", 20.0f }, { "spRoom", 0.4f }, { "spRoomDecay", 8.0f } } },
+        { "Ton-Linie",           "Leitner", {} },
+        { "Through the Body",    "Leitner", { { "spFigure", Line }, { "spHeight", 0.0f }, { "spApart", 0.0f }, { "spSwell", 0.8f }, { "spSeconds", 3.0f }, { "spPoints", 12 }, { "spLegato", 0.7f } } },
+        { "Ton-Tor",             "Leitner", { { "spFigure", Gate }, { "spCounter", 1.0f }, { "spLift", 0.7f }, { "spSeconds", 5.0f }, { "spPoints", 19 }, { "spLegato", 0.3f }, { "spApart", 20.0f } } },
+        { "Schwingen",           "Leitner", { { "spFigure", Swing }, { "spPoints", 33 }, { "spSeconds", 5.0f }, { "spRoom", 0.3f }, { "spApart", 15.0f } } },
+        { "Ton-Liege",           "Leitner", { { "spFigure", Liege }, { "spPoints", 4 }, { "spLegato", 1.0f }, { "spSeconds", 9.0f }, { "spApart", 10.0f }, { "spSwell", 0.4f } } },
+        { "Soundcube 1969",      "Leitner", { { "spFigure", Soundcube }, { "spPoints", 32 }, { "spLegato", 0.2f }, { "spSeconds", 14.0f }, { "spRoom", 0.1f } } },
+        { "Vertical Space",      "Leitner", { { "spFigure", Vertical }, { "spCounter", 1.0f }, { "spLift", 0.6f }, { "spPoints", 6 }, { "spLegato", 0.1f }, { "spSeconds", 2.5f }, { "spApart", 45.0f } } },
+        { "Spiral Space",        "Leitner", { { "spFigure", Spiral }, { "spPoints", 24 }, { "spLegato", 0.5f }, { "spSeconds", 10.0f }, { "spLift", 0.4f } } },
+        { "Ton-W\xc3\xbcrfel",   "Leitner", { { "spFigure", Cube }, { "spPoints", 8 }, { "spLegato", 0.0f }, { "spSeconds", 6.0f }, { "spCounter", 0.5f } } },
+        { "Widening, Narrowing", "Leitner", { { "spFigure", Expand }, { "spApart", 90.0f }, { "spPoints", 33 }, { "spSeconds", 7.0f }, { "spSwell", 0.3f }, { "spLevel", 0.8f } } },
+        { "Vault",               "Leitner", { { "spFigure", Vault }, { "spPoints", 33 }, { "spSeconds", 20.0f }, { "spRoom", 0.4f }, { "spRoomDecay", 8.0f } } },
         // after Xenakis
-        { "Ruled Surface",       "Xenakis", "Harmonic Fountain", { { "spFigure", Paraboloid }, { "spPoints", 33 }, { "spCounter", 1.0f }, { "spSeconds", 8.0f }, { "spSize", 1.0f } } },
-        { "Terretektorh",        "Xenakis", "Spectral Snow",   { { "spFigure", Terretektorh }, { "spPoints", 24 }, { "spLegato", 0.6f }, { "spSeconds", 6.0f }, { "spCounter", 0.5f } } },
-        { "Polytope",            "Xenakis", "Pelog Echoes",    { { "spFigure", Polytope }, { "spChance", 1.0f }, { "spScatter", 0.4f }, { "spRest", 0.2f }, { "spPoints", 8 }, { "spLegato", 1.0f }, { "spSeconds", 4.0f } } },
-        { "Sieve Ring",          "Xenakis", "Maqam Mist",      { { "spFigure", Circle }, { "spPoints", 16 }, { "spLegato", 0.0f }, { "spSieve", 2 }, { "spChance", 0.6f }, { "spSeconds", 3.0f } } },
-        { "Brownian Line",       "Xenakis", "Tritave Choir",   { { "spFigure", Line }, { "spWalk", 0.7f }, { "spSeconds", 6.0f }, { "spPoints", 33 }, { "spSwell", 0.5f } } },
-        // pulses, after Fell, Lazar and Kindohm
-        { "Walking Accent",      "pulses",  "Clear Water",     { { "spFigure", Circle }, { "spPoints", 8 }, { "spPulse", 1.0f }, { "spPulseRate", 9.0f }, { "spCell", 3 }, { "spRotate", 1 }, { "spPulseWidth", 0.3f }, { "spSeconds", 4.0f }, { "spRoom", 0.05f } } },
-        { "Rhythm Into Pitch",   "pulses",  "Cloudfin",        { { "spFigure", Line }, { "spPoints", 33 }, { "spPulse", 1.0f }, { "spPulseRate", 30.0f }, { "spPulseBend", 1.0f }, { "spPulseWidth", 0.2f }, { "spSeconds", 6.0f }, { "spApart", 40.0f } } },
-        { "Five in Eight",       "pulses",  "Pelog Echoes",    { { "spFigure", Cube }, { "spPoints", 8 }, { "spLegato", 0.0f }, { "spPulse", 1.0f }, { "spPulseRate", 7.0f }, { "spHits", 5 }, { "spSteps", 8 }, { "spCell", 6 }, { "spJux", 3 }, { "spSeconds", 5.0f } } },
-        { "Broken Pattern",      "pulses",  "Spectral Snow",   { { "spFigure", Polytope }, { "spPulse", 1.0f }, { "spPulseRate", 11.0f }, { "spHits", 5 }, { "spSteps", 8 }, { "spDrop", 0.3f }, { "spJux", 1 }, { "spChance", 0.8f }, { "spPoints", 8 }, { "spSeconds", 3.0f } } },
+        { "Ruled Surface",       "Xenakis", { { "spFigure", Paraboloid }, { "spPoints", 33 }, { "spCounter", 1.0f }, { "spSeconds", 8.0f }, { "spSize", 1.0f } } },
+        { "Terretektorh",        "Xenakis", { { "spFigure", Terretektorh }, { "spPoints", 24 }, { "spLegato", 0.6f }, { "spSeconds", 6.0f }, { "spCounter", 0.5f } } },
+        { "Polytope",            "Xenakis", { { "spFigure", Polytope }, { "spChance", 1.0f }, { "spScatter", 0.4f }, { "spRest", 0.2f }, { "spPoints", 8 }, { "spLegato", 1.0f }, { "spSeconds", 4.0f } } },
+        // Persephassa (1969): six percussionists round the audience, the sound circling and speeding up
+        { "Persephassa",         "Xenakis", { { "spFigure", Circle }, { "spPoints", 6 }, { "spLegato", 0.25f }, { "spSeconds", 1.6f }, { "spCounter", 1.0f }, { "spChance", 0.3f }, { "spRoom", 0.2f } } },
+        // Nomos Gamma (1968): the orchestra scattered among the listeners
+        { "Nomos Gamma",         "Xenakis", { { "spFigure", Polytope }, { "spPoints", 16 }, { "spLegato", 0.4f }, { "spScatter", 0.7f }, { "spChance", 0.6f }, { "spWalk", 0.3f }, { "spSeconds", 5.0f }, { "spRoom", 0.25f } } },
+        { "Sieve Ring",          "Xenakis", { { "spFigure", Circle }, { "spPoints", 16 }, { "spLegato", 0.0f }, { "spSieve", 2 }, { "spChance", 0.6f }, { "spSeconds", 3.0f } } },
+        { "Brownian Line",       "Xenakis", { { "spFigure", Line }, { "spWalk", 0.7f }, { "spSeconds", 6.0f }, { "spPoints", 33 }, { "spSwell", 0.5f } } },
     };
     return list;
 }
 }
 
-int LeitnerProcessor::numSpacePrograms() { return (int) spacePrograms().size(); }
-int LeitnerProcessor::getNumPrograms() { return numSpacePrograms() + CloudfinProcessor::getNumPrograms(); }
+int LeitnerProcessor::getNumPrograms() { return (int) spacePrograms().size(); }
 
 const String LeitnerProcessor::getProgramName (int i)
 {
-    const int n = numSpacePrograms();
-    if (isPositiveAndBelow (i, n)) return spacePrograms()[(size_t) i].name;
-    return CloudfinProcessor::getProgramName (i - n);
+    return isPositiveAndBelow (i, getNumPrograms()) ? String::fromUTF8 (spacePrograms()[(size_t) i].name) : String();
 }
 
 String LeitnerProcessor::getProgramGroup (int i)
 {
-    const int n = numSpacePrograms();
-    if (isPositiveAndBelow (i, n)) return spacePrograms()[(size_t) i].group;
-    return "sound only: " + CloudfinProcessor::getProgramGroup (i - n);
+    return isPositiveAndBelow (i, getNumPrograms()) ? String (spacePrograms()[(size_t) i].group) : String();
 }
 
 void LeitnerProcessor::setCurrentProgram (int index)
 {
-    const int n = numSpacePrograms();
     if (! isPositiveAndBelow (index, getNumPrograms())) return;
-    if (index >= n)
-    {
-        // one of Cloudfin's: the sound changes, the space stays as you have it
-        std::vector<float> keep;
-        for (auto* prm : spaceParams) keep.push_back (prm->getValue());
-        CloudfinProcessor::setCurrentProgram (index - n);
-        for (size_t i = 0; i < spaceParams.size(); ++i) spaceParams[i]->setValueNotifyingHost (keep[i]);
-        program.store (index);
-        return;
-    }
     const auto& pr = spacePrograms()[(size_t) index];
     const float keepOrder = static_cast<RangedAudioParameter*> (order)->getValue();   // (the order belongs to the track, not the program)
-    int sound = 0;
-    for (int i = 0; i < CloudfinProcessor::getNumPrograms(); ++i) if (CloudfinProcessor::getProgramName (i) == pr.sound) sound = i;
-    CloudfinProcessor::setCurrentProgram (sound);     // (this also puts every space parameter back to its default)
+    for (auto* prm : spaceParams) prm->setValueNotifyingHost (prm->getDefaultValue());
     for (auto& v : pr.space)
         for (auto* prm : spaceParams)
             if (prm->getParameterID() == v.id) prm->setValueNotifyingHost (prm->convertTo0to1 (v.v));
     order->setValueNotifyingHost (keepOrder);
     program.store (index);
+}
+
+// a random space: any figure, a raster, and Xenakis's chance in some measure. The order, the level and
+// 'hold' are left as they are.
+void LeitnerProcessor::randomize()
+{
+    Random r;
+    auto set = [] (RangedAudioParameter* p, float v) { p->setValueNotifyingHost (p->convertTo0to1 (v)); };
+    set (figure, (float) r.nextInt (leitner::numFigures));
+    set (seconds, 1.0f + 14.0f * r.nextFloat() * r.nextFloat());
+    set (rest, r.nextBool() ? 0.0f : 0.4f * r.nextFloat());
+    const int pts[] = { 4, 6, 8, 12, 16, 24, leitner::kMaxPoints };
+    set (points, (float) pts[r.nextInt (7)]);
+    set (legato, r.nextFloat());
+    set (size, 0.6f + 0.4f * r.nextFloat());
+    set (height, 0.8f * r.nextFloat() - 0.4f);
+    set (turn, 360.0f * r.nextFloat() - 180.0f);
+    set (apart, 60.0f * r.nextFloat());
+    set (counter, (float) r.nextInt (3) * 0.5f);
+    set (swell, 0.6f * r.nextFloat());
+    set (lift, 0.6f * r.nextFloat());
+    set (chance, r.nextBool() ? 0.0f : r.nextFloat());
+    set (walk, r.nextBool() ? 0.0f : 0.8f * r.nextFloat());
+    set (scatter, r.nextBool() ? 0.0f : 0.6f * r.nextFloat());
+    set (sieve, (float) r.nextInt (leitner::kNumSieves));
+    set (room, 0.4f * r.nextFloat());
+    set (roomDecay, 1.0f + 7.0f * r.nextFloat());
+}
+
+// Stereo in; out, Ambisonics. As an Audio Unit and in the desktop app 3rd order (16 channels) is
+// published; everywhere else up to 7th (64), so a track with that many has room for it. The order
+// setting says how many are used.
+AudioProcessor::BusesProperties LeitnerProcessor::buses()
+{
+    const auto t = PluginHostType::getPluginLoadedAs();
+    const bool third = t == AudioProcessor::wrapperType_AudioUnit || t == AudioProcessor::wrapperType_Standalone;
+    return BusesProperties()
+        .withInput  ("Input",  AudioChannelSet::stereo(), true)
+        .withOutput ("Output", AudioChannelSet::ambisonic (third ? 3 : 7), true);
 }
 
 bool LeitnerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -198,8 +187,6 @@ leitner::Params LeitnerProcessor::readSpace() const
     p.turn = turn->get(); p.apart = apart->get(); p.counter = counter->get();
     p.points = points->get(); p.legato = legato->get(); p.swell = swell->get(); p.lift = lift->get();
     p.chance = chance->get(); p.walk = walk->get(); p.scatter = scatter->get(); p.sieve = sieve->getIndex();
-    p.pulse = pulse->get(); p.pulseRate = pulseRate->get(); p.pulseBend = pulseBend->get(); p.pulseWidth = pulseWidth->get(); p.drop = drop->get();
-    p.cell = cell->getIndex(); p.jux = jux->getIndex(); p.rotate = rotate->get(); p.hits = hits->get(); p.steps = steps->get();
     p.room = room->get(); p.roomDecay = roomDecay->get(); p.level = level->get();
     p.hold = hold->get();
     return p;
@@ -207,12 +194,11 @@ leitner::Params LeitnerProcessor::readSpace() const
 
 void LeitnerProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    CloudfinProcessor::prepareToPlay (sampleRate, samplesPerBlock);
     space.prepare (sampleRate);
     stereo.setSize (2, jmax (1, samplesPerBlock), false, true, true);
 }
 
-void LeitnerProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi)
+void LeitnerProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 {
     ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
@@ -220,13 +206,9 @@ void LeitnerProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& mid
     if (n == 0 || numOut == 0) return;
     if (stereo.getNumSamples() < n) stereo.setSize (2, n, false, true, true);
 
-    // Cloudfin itself, in stereo
+    // the input, untouched: the left channel is line 1, the right line 2 (a mono input: both)
     stereo.copyFrom (0, 0, buffer, 0, 0, n);
     stereo.copyFrom (1, 0, buffer, numIn > 1 && buffer.getNumChannels() > 1 ? 1 : 0, 0, n);
-    {
-        AudioBuffer<float> two (stereo.getArrayOfWritePointers(), 2, n);
-        CloudfinProcessor::processBlock (two, midi);
-    }
 
     auto p = readSpace();
 
@@ -264,21 +246,61 @@ void LeitnerProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& mid
 
 AudioProcessorEditor* LeitnerProcessor::createEditor() { return new LeitnerEditor (*this); }
 
-// the space's parameters travel as properties on Cloudfin's state
+// The state: every parameter as an attribute (its 0..1 value), the program, and how the room is turned.
+// Sessions and presets from Leitner 0.2 (which kept these same attributes on Cloudfin's state) load too.
 void LeitnerProcessor::getStateInformation (MemoryBlock& dest)
 {
-    for (auto* prm : spaceParams) apvts.state.setProperty (prm->getParameterID(), prm->getValue(), nullptr);
-    apvts.state.setProperty ("ltProgram", program.load(), nullptr);
-    CloudfinProcessor::getStateInformation (dest);
+    XmlElement x ("LEITNER");
+    x.setAttribute ("version", 3);
+    for (auto* prm : spaceParams) x.setAttribute (prm->getParameterID(), prm->getValue());
+    x.setAttribute ("ltProgram", program.load());
+    x.setAttribute ("viewYaw", viewYaw.load());
+    x.setAttribute ("viewPitch", viewPitch.load());
+    copyXmlToBinary (x, dest);
 }
 
-void LeitnerProcessor::setStateInformation (const void* data, int size)
+void LeitnerProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    CloudfinProcessor::setStateInformation (data, size);
+    const auto x = getXmlFromBinary (data, sizeInBytes);
+    if (x == nullptr) return;
     for (auto* prm : spaceParams)
-        if (apvts.state.hasProperty (prm->getParameterID()))
-            prm->setValueNotifyingHost ((float) apvts.state.getProperty (prm->getParameterID()));
-    program.store (jlimit (0, getNumPrograms() - 1, (int) apvts.state.getProperty ("ltProgram", 0)));
+        if (x->hasAttribute (prm->getParameterID()))
+            prm->setValueNotifyingHost ((float) x->getDoubleAttribute (prm->getParameterID()));
+    program.store (jlimit (0, getNumPrograms() - 1, x->getIntAttribute ("ltProgram", 0)));
+    if (x->hasAttribute ("viewYaw")) { viewYaw.store ((float) x->getDoubleAttribute ("viewYaw")); viewPitch.store ((float) x->getDoubleAttribute ("viewPitch")); }
+}
+
+File LeitnerProcessor::userPresetFolder() const
+{
+   #if JUCE_MAC
+    const auto base = File::getSpecialLocation (File::userApplicationDataDirectory).getChildFile ("Application Support");
+   #else
+    const auto base = File::getSpecialLocation (File::userApplicationDataDirectory);   // AppData\Roaming on Windows, ~/.config on Linux
+   #endif
+    return base.getChildFile ("FreakiePie").getChildFile ("Leitner").getChildFile ("Presets");
+}
+
+Array<File> LeitnerProcessor::userPresets() const
+{
+    auto files = userPresetFolder().findChildFiles (File::findFiles, false, "*" + presetExtension());
+    files.sort();
+    return files;
+}
+
+bool LeitnerProcessor::saveUserPreset (const File& file)
+{
+    MemoryBlock mb;
+    getStateInformation (mb);
+    const auto target = file.withFileExtension (presetExtension());
+    return target.getParentDirectory().createDirectory().wasOk() && target.replaceWithData (mb.getData(), mb.getSize());
+}
+
+bool LeitnerProcessor::loadUserPreset (const File& file)
+{
+    MemoryBlock mb;
+    if (! file.existsAsFile() || ! file.loadFileAsData (mb) || mb.getSize() == 0) return false;
+    setStateInformation (mb.getData(), (int) mb.getSize());
+    return true;
 }
 
 AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new LeitnerProcessor(); }

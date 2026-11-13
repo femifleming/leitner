@@ -14,13 +14,8 @@ static void check (bool ok, const String& what) { std::printf ("%s  %s\n", ok ? 
 
 static void setP (RangedAudioParameter* p, float real) { p->setValueNotifyingHost (p->convertTo0to1 (real)); }
 
-// everything in Cloudfin out of the way: the lines carry the input untouched
-static void dry (LeitnerProcessor& p)
-{
-    for (auto id : { ids::sgMix, ids::psMix, ids::fmMix, ids::grMix, ids::dlMix, ids::rvMix, ids::cpMix, ids::masterFb, ids::hydroLevel })
-        setP (p.apvts.getParameter (id), 0.0f);
-    setP (p.room, 0.0f);
-}
+// no room: the lines carry the input and nothing else
+static void dry (LeitnerProcessor& p) { setP (p.room, 0.0f); }
 
 // a 440 Hz tone into the left, the right or both, for 'seconds'; returns all 64 channels
 static AudioBuffer<float> run (LeitnerProcessor& p, double seconds, bool left, bool right, int channels = 64, double* realtime = nullptr)
@@ -177,51 +172,6 @@ int main (int argc, char** argv)
         const auto even = passLengths (0.0f), byChance = passLengths (1.0f);
         check (spread (even) < 1.1 && spread (byChance) > 4.0, String::formatted ("chance 0: longest pass %.2fx the shortest; chance 100 %%: %.1fx", spread (even), spread (byChance)));
     }
-    {   // the pulse layer: gaps of silence, a Euclidean pattern, Fell's cells, the rate bending, and line 2 changed by jux
-        auto envelope = [] (LeitnerProcessor& p, bool right)
-        {
-            // how much of the time the omni channel is sounding, in 1 ms steps, and how many separate pulses there were
-            const auto a = run (p, 2.0, ! right, right, 16);
-            std::vector<int> on;
-            for (int i = 0; i + 48 <= a.getNumSamples(); i += 48) on.push_back (a.getMagnitude (0, i, 48) > 0.02f ? 1 : 0);
-            return on;
-        };
-        auto count = [] (const std::vector<int>& on, int from, int to) { int n = 0; for (int i = std::max (1, from); i < to && i < (int) on.size(); ++i) if (on[(size_t) i] && ! on[(size_t) i - 1]) ++n; return n; };
-        auto fill = [] (const std::vector<int>& on) { int n = 0; for (int v : on) n += v; return (double) n / (double) on.size(); };
-        auto base = [] (LeitnerProcessor& p) { dry (p); setP (p.pulse, 1.0f); setP (p.pulseRate, 10.0f); setP (p.pulseWidth, 0.5f); setP (p.seconds, 1.0f); setP (p.points, (float) leitner::kMaxPoints); };
-
-        LeitnerProcessor a; base (a);
-        const auto ea = envelope (a, false);
-        check (std::abs (count (ea, 0, 2000) - 20) <= 1 && std::abs (fill (ea) - 0.5) < 0.08, String::formatted ("10 pulses a second, half width: %d pulses in 2 s, sounding %.0f %% of the time", count (ea, 0, 2000), 100.0 * fill (ea)));
-
-        LeitnerProcessor b; base (b); setP (b.hits, 3.0f); setP (b.steps, 8.0f);
-        const auto eb = envelope (b, false);
-        check (std::abs (count (eb, 0, 2000) - 8) <= 1, String::formatted ("3 hits in 8 steps: %d pulses in 2 s (20 without the pattern)", count (eb, 0, 2000)));
-
-        LeitnerProcessor c; base (c); setP (c.pulseBend, 1.0f);
-        const auto ec = envelope (c, false);
-        check (count (ec, 0, 300) * 3 < count (ec, 700, 1000), String::formatted ("bend up: %d pulses in the first 0.3 s of a pass, %d in the last 0.3 s", count (ec, 0, 300), count (ec, 700, 1000)));
-
-        // Fell's cell 7 1 1 3: gaps in that proportion
-        leitner::Params sp; sp.cell = 6; sp.pulseRate = 10.0f;
-        String gaps; for (int k = 0; k < 4; ++k) gaps << roundToInt (leitner::pulseGap (sp, 0, 0, k, 0.5f) * 1000.0f) << " ";
-        check (gaps == "233 33 33 100 ", "the cell 7 1 1 3 at 10 a second gives gaps of " + gaps + "ms");
-        sp.rotate = 1;
-        check (std::abs (leitner::pulseGap (sp, 0, 1, 0, 0.5f) - 0.0333f) < 0.001f, "rotate 1: on the next pass the cell starts a step further on");
-
-        LeitnerProcessor d; base (d); setP (d.hits, 3.0f); setP (d.steps, 8.0f); setP (d.jux, 1.0f);
-        const auto e1 = envelope (d, false);
-        LeitnerProcessor d2; base (d2); setP (d2.hits, 3.0f); setP (d2.steps, 8.0f); setP (d2.jux, 1.0f);
-        const auto e2 = envelope (d2, true);
-        int differ = 0; for (size_t i = 0; i < std::min (e1.size(), e2.size()); ++i) differ += e1[i] != e2[i] ? 1 : 0;
-        check (differ > 100, String::formatted ("jux backwards: line 2 differs from line 1 for %d ms of 2 s", differ));
-
-        // each pulse sounds from one place: the direction doesn't move while a pulse lasts
-        LeitnerProcessor f; base (f); setP (f.figure, (float) leitner::fgCircle); setP (f.pulseRate, 4.0f); setP (f.pulseWidth, 0.6f);
-        const auto g = run (f, 1.0, true, false, 16);
-        const auto d0 = directionOf (g, 24000 + 480, 2400), d1 = directionOf (g, 24000 + 4800, 2400);   // early and late in the pulse that starts at 0.5 s
-        check (std::abs (d0.x - d1.x) < 0.02f && std::abs (d0.y - d1.y) < 0.02f, String::formatted ("a pulse stays put: (%.2f, %.2f) at its start, (%.2f, %.2f) 90 ms on", d0.x, d0.y, d1.x, d1.y));
-    }
     {   // every figure at 7th order with the room: finite, and how fast
         bool ok = true; double slowest = 1.0e9; float peak = 0.0f;
         for (int f = 0; f < leitner::numFigures; ++f)
@@ -235,10 +185,10 @@ int main (int argc, char** argv)
         }
         check (ok && slowest > 3.0 && peak < 2.0f, String::formatted ("all %d figures at 7th order with the room: finite, peak %.2f, slowest %.1fx realtime", (int) leitner::numFigures, peak, slowest));
     }
-    {   // the programs: every one of Leitner's sounds and stays finite; a sound program leaves the space alone; your own presets
+    {   // the programs: every one sounds and stays finite; a program keeps the order; your own presets; old sessions
         bool ok = true; String quiet;
         LeitnerProcessor names;
-        for (int k = 0; k < LeitnerProcessor::numSpacePrograms(); ++k)
+        for (int k = 0; k < names.getNumPrograms(); ++k)
         {
             LeitnerProcessor p; p.setCurrentProgram (k);
             const auto a = run (p, 3.0, true, true, 16);
@@ -246,33 +196,53 @@ int main (int argc, char** argv)
             for (int c = 0; c < 16; ++c) { peak = std::max (peak, a.getMagnitude (c, 0, a.getNumSamples())); for (int i = 0; i < a.getNumSamples(); i += 53) if (! std::isfinite (a.getSample (c, i))) finite = false; }
             if (! finite || peak < 0.02f || peak > 1.5f) { ok = false; quiet << p.getProgramName (k) << String::formatted (" (peak %.3f) ", peak); }
         }
-        check (ok, String::formatted ("all %d of Leitner's programs sound and stay finite ", LeitnerProcessor::numSpacePrograms()) + quiet);
+        check (ok, String::formatted ("all %d programs sound and stay finite ", names.getNumPrograms()) + quiet);
+        int leitnerN = 0, xenakisN = 0;
+        for (int k = 0; k < names.getNumPrograms(); ++k) { leitnerN += names.getProgramGroup (k) == "Leitner"; xenakisN += names.getProgramGroup (k) == "Xenakis"; }
+        check (leitnerN + xenakisN == names.getNumPrograms(), String::formatted ("%d after Leitner, %d after Xenakis, nothing else", leitnerN, xenakisN));
+
         LeitnerProcessor p;
         p.setCurrentProgram (2);                                             // Ton-Tor
         check (p.figure->getIndex() == leitner::fgGate && p.getProgramName (p.getCurrentProgram()) == "Ton-Tor", "a program sets its figure");
-        setP (p.order, 2.0f);
-        p.setCurrentProgram (LeitnerProcessor::numSpacePrograms() + 5);      // one of Cloudfin's
-        check (p.figure->getIndex() == leitner::fgGate && p.order->getIndex() == 2, "a sound-only program leaves the space and the order alone");
-        p.setCurrentProgram (11);
-        check (p.order->getIndex() == 2 && p.figure->getIndex() == leitner::fgPolytope, "one of Leitner's keeps the order you set");
+        setP (p.order, 2.0f); setP (p.walk, 0.9f);
+        p.setCurrentProgram (13);                                            // Polytope
+        check (p.order->getIndex() == 2 && p.figure->getIndex() == leitner::fgPolytope && p.walk->get() < 0.01f, "a program keeps the order you set and resets the rest");
 
         const auto dir = File::getSpecialLocation (File::tempDirectory).getChildFile ("leitner-preset-test");
         dir.deleteRecursively();
-        setP (p.turn, 77.0f); setP (p.apvts.getParameter (ids::dlMix), 0.66f);
+        setP (p.turn, 77.0f);
         check (p.saveUserPreset (dir.getChildFile ("mine")) && dir.getChildFile ("mine.leitner").existsAsFile(), "a preset saves to a file");
         LeitnerProcessor q;
-        check (q.loadUserPreset (dir.getChildFile ("mine.leitner")) && std::abs (q.turn->get() - 77.0f) < 0.5f && q.figure->getIndex() == leitner::fgPolytope
-               && std::abs (q.apvts.getRawParameterValue (ids::dlMix)->load() - 0.66f) < 0.01f, "and loads back, the space and the sound");
+        check (q.loadUserPreset (dir.getChildFile ("mine.leitner")) && std::abs (q.turn->get() - 77.0f) < 0.5f && q.figure->getIndex() == leitner::fgPolytope, "and loads back");
         dir.deleteRecursively();
         check (names.userPresetFolder().getFullPathName().contains ("Leitner"), "your presets live in " + names.userPresetFolder().getFullPathName());
+
+        // a session from Leitner 0.2: Cloudfin's state with the space's values as attributes
+        XmlElement old ("CloudfinState");
+        old.setAttribute ("spFigure", p.figure->convertTo0to1 ((float) leitner::fgSpiral));
+        old.setAttribute ("spPoints", p.points->convertTo0to1 (12.0f));
+        old.setAttribute ("dlMix", 0.5);
+        MemoryBlock mb; AudioProcessor::copyXmlToBinary (old, mb);
+        LeitnerProcessor r; r.setStateInformation (mb.getData(), (int) mb.getSize());
+        check (r.figure->getIndex() == leitner::fgSpiral && r.points->get() == 12, "a session saved by Leitner 0.2 opens with its space");
+    }
+    {   // the input is not changed: held still and continuous, the omni channel is the input times one gain
+        LeitnerProcessor p; dry (p);
+        setP (p.hold, 1.0f); setP (p.points, (float) leitner::kMaxPoints);
+        auto a = run (p, 0.3, true, false, 16);
+        auto in = [] (int i) { return 0.25f * (float) std::sin (2.0 * MathConstants<double>::pi * 440.0 * i / SR); };
+        const float gain = a.getSample (0, 8001) / in (8001);
+        double err = 0.0;
+        for (int i = 4000; i < 12000; ++i) err = std::max (err, (double) std::abs (a.getSample (0, i) - gain * in (i)));
+        check (err < 1.0e-4, String::formatted ("the sound itself passes unchanged (largest difference from a pure gain %.6f)", err));
     }
     {   // the state, and a stereo track
         LeitnerProcessor p;
-        setP (p.figure, (float) leitner::fgGate); setP (p.order, 2.0f); setP (p.points, 12.0f); setP (p.lift, 0.7f); setP (p.apvts.getParameter (ids::rvMix), 0.61f);
+        setP (p.figure, (float) leitner::fgGate); setP (p.order, 2.0f); setP (p.points, 12.0f); setP (p.lift, 0.7f); p.viewYaw.store (33.0f);
         MemoryBlock mb; p.getStateInformation (mb);
         LeitnerProcessor q; q.setStateInformation (mb.getData(), (int) mb.getSize());
         check (q.figure->getIndex() == leitner::fgGate && q.order->getIndex() == 2 && q.points->get() == 12 && std::abs (q.lift->get() - 0.7f) < 0.01f
-               && std::abs (q.apvts.getRawParameterValue (ids::rvMix)->load() - 0.61f) < 0.01f, "the space and Cloudfin's settings come back with the session");
+               && std::abs (q.viewYaw.load() - 33.0f) < 0.01f, "the space and the turned room come back with the session");
         LeitnerProcessor s; dry (s);
         const auto a = run (s, 0.5, true, true, 2);
         check (a.getMagnitude (0, 0, a.getNumSamples()) > 0.05f && s.orderNow.load() == 0, "on a stereo track a left-right fold comes out");
@@ -280,19 +250,37 @@ int main (int argc, char** argv)
     {   // the window: from the front, turned, and one of Xenakis's figures; and how nearly its two halves mirror
         struct Shot { int figure; float yaw, pitch, scatter; const char* name; };
         const Shot shots[] = { { leitner::fgGate, 0.0f, 0.0f, 0.0f, "front" }, { leitner::fgSoundcube, 38.0f, 24.0f, 0.0f, "turned" },
-                               { leitner::fgParaboloid, -30.0f, 18.0f, 0.0f, "paraboloid" }, { leitner::fgPolytope, 25.0f, 30.0f, 0.4f, "polytope" }, { leitner::fgCircle, 30.0f, 35.0f, 0.0f, "pulses" } };
+                               { leitner::fgParaboloid, -30.0f, 18.0f, 0.0f, "paraboloid" }, { leitner::fgPolytope, 25.0f, 30.0f, 0.4f, "polytope" }, { leitner::fgCircle, 30.0f, 35.0f, 0.0f, "xenakis" } };
         for (auto& sh : shots)
         {
             LeitnerProcessor p;
             setP (p.figure, (float) sh.figure); setP (p.seconds, 3.0f); setP (p.points, 12.0f); setP (p.scatter, sh.scatter);
             if (sh.figure == leitner::fgGate) setP (p.counter, 1.0f);
-            if (String (sh.name) == "pulses") { setP (p.pulse, 1.0f); setP (p.cell, 6.0f); setP (p.hits, 5.0f); setP (p.steps, 8.0f); setP (p.pulseBend, 0.4f); setP (p.jux, 1.0f); setP (p.seconds, 4.0f); }
-            setP (p.apvts.getParameter (ids::att (ids::grSize)), 0.5f);
+            const bool xen = String (sh.name) == "xenakis" || String (sh.name) == "polytope";
+            if (xen) { setP (p.chance, 0.8f); setP (p.walk, 0.6f); setP (p.sieve, 2.0f); setP (p.points, 16.0f); setP (p.seconds, 0.25f); }
             p.viewYaw.store (sh.yaw); p.viewPitch.store (sh.pitch);
-            run (p, 0.8, true, true);
             std::unique_ptr<AudioProcessorEditor> ed (p.createEditor());
             ed->setSize (1500, 790);
             ed->setVisible (true);
+            // let some passes go by (the Xenakis sheet draws the passes it has seen)
+            if (xen)
+            {
+                // one run, many passes: the window watches between blocks
+                p.setPlayConfigDetails (2, 64, SR, BLOCK); p.prepareToPlay (SR, BLOCK);
+                AudioBuffer<float> buf (64, BLOCK); MidiBuffer midi; Random rnd (3);
+                for (int k = 0; k < 40; ++k)
+                {
+                    for (int blk = 0; blk < 40; ++blk)
+                    {
+                        buf.clear();
+                        for (int i = 0; i < BLOCK; ++i) { buf.setSample (0, i, 0.2f * (rnd.nextFloat() - 0.5f)); buf.setSample (1, i, 0.2f * (rnd.nextFloat() - 0.5f)); }
+                        p.processBlock (buf, midi);
+                    }
+                    MessageManager::getInstance()->runDispatchLoopUntil (40);
+                }
+            }
+            else run (p, 0.8, true, true);
+            if (xen) setP (p.seconds, 3.0f);
             MessageManager::getInstance()->runDispatchLoopUntil (150);
             const auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.5f);
             const auto f = outDir.getChildFile ("leitner_" + String (sh.name) + ".png"); f.deleteFile();
@@ -316,7 +304,9 @@ int main (int argc, char** argv)
                             }
                         ++total; if ((l > 2) == (r > 2)) ++same;
                     }
-                check (same > total * 88 / 100, String::formatted ("the window mirrors: %d of %d cells have ink on both sides or neither", same, total));
+                // (the side sheets mirror in their layout, not their drawings: Leitner's plan and elevation on
+                // the left, Xenakis's sieve, chance and walk on the right)
+                check (same > total * 70 / 100, String::formatted ("the window mirrors: %d of %d cells have ink on both sides or neither", same, total));
             }
         }
     }

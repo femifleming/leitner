@@ -133,43 +133,235 @@ void Check::paint (Graphics& g)
 void Check::mouseDown (const MouseEvent&) { att.setValueAsCompleteGesture (on ? 0.0f : 1.0f); }
 
 //==============================================================================
-void PulseStrip::paint (Graphics& g)
+// Leitner's sheet. Plan: seen from above, the front at the top. Elevation: seen from the left, the
+// front to the right. The room is the box the unit sphere sits in, the listener in the middle.
+void Plan::paint (Graphics& g)
 {
+    using leitner::Vec3;
     const auto p = proc.readSpace();
     const auto st = proc.space.stateNow();
-    const auto b = getLocalBounds().toFloat().reduced (0.5f);
-    g.setColour (ink);
-    g.drawRect (b, 0.9f);
-    g.setFont (typed (10.0f));
-    const String label = line == 0 ? "line 1: its pulses over one pass" : "line 2: the same, as jux has it";
-    g.drawText (label, getLocalBounds().reduced (6, 3), mirrored ? Justification::topRight : Justification::topLeft);
-    const auto lane = b.reduced (6.0f, 0.0f).withTrimmedTop (22.0f).withTrimmedBottom (10.0f);
-    auto X = [&] (float u) { return mirrored ? lane.getRight() - lane.getWidth() * u : lane.getX() + lane.getWidth() * u; };
-    const float T = jmax (0.05f, p.seconds) * proc.space.passLength.load();
-    if (p.pulse <= 0.0f)
+    const float W = (float) getWidth();
+    float ws[leitner::kMaxPoints]; int idx[leitner::kMaxPoints];
+    const int n = p.points < leitner::kMaxPoints ? leitner::rasterPoints (p, ws, idx) : 0;
+
+    auto heading = [&] (const String& t, int y)
     {
-        g.setColour (faint);
-        g.drawText ("no pulses: the line sounds all the time", lane.toNearestInt(), Justification::centred);
-    }
-    else
+        g.setColour (ink); g.setFont (typed (11.5f, true));
+        g.drawText (t, 0, y, getWidth(), 18, Justification::centredLeft);
+        g.drawLine (0.0f, (float) y + 18.0f, W, (float) y + 18.0f, 1.2f);
+    };
+    // one view: the room, the listener, the two lines, their loudspeakers, where they are now
+    auto view = [&] (Rectangle<float> box, bool plan)
     {
-        g.setColour (line == 0 ? ink : red);
-        float t = 0.0f;
-        for (int k = 0; k < 400 && t < T; ++k)
+        const float s = 0.5f * jmin (box.getWidth(), box.getHeight()) - 10.0f;
+        const auto c = box.getCentre();
+        auto P = [&] (Vec3 v) { return plan ? Point<float> (c.x - v.y * s, c.y - v.x * s) : Point<float> (c.x + v.x * s, c.y - v.z * s); };
+        g.setColour (ink);
+        g.drawRect (Rectangle<float> (c.x - s, c.y - s, 2.0f * s, 2.0f * s), 1.0f);
+        // the loudspeakers in the walls, five a side
+        g.setColour (ink.withAlpha (0.7f));
+        for (int i = 0; i < 5; ++i)
         {
-            const float gap = leitner::pulseGap (p, line, st.pass, k, t / T);
-            if (leitner::pulseSounds (p, line, st.pass, k))
-            {
-                const float x0 = X (t / T), x1 = X (jmin (1.0f, (t + gap * jlimit (0.02f, 1.0f, p.pulseWidth)) / T));
-                g.fillRect (Rectangle<float> (jmin (x0, x1), lane.getY(), jmax (1.0f, std::abs (x1 - x0)), lane.getHeight()));
-            }
-            t += gap;
+            const float a = -1.0f + (2.0f * (float) i + 1.0f) / 5.0f;
+            for (auto q : { Point<float> (c.x + a * s, c.y - s), Point<float> (c.x + a * s, c.y + s), Point<float> (c.x - s, c.y + a * s), Point<float> (c.x + s, c.y + a * s) })
+                g.drawEllipse (q.x - 2.5f, q.y - 2.5f, 5.0f, 5.0f, 0.7f);
         }
+        // the listener: from above a head and shoulders facing the front; from the side a standing figure
+        g.setColour (ink);
+        if (plan)
+        {
+            g.fillEllipse (c.x - 0.24f * s, c.y - 0.06f * s, 0.48f * s, 0.15f * s);
+            g.fillEllipse (c.x - 0.07f * s, c.y - 0.09f * s, 0.14f * s, 0.14f * s);
+            g.drawLine (c.x, c.y - 0.09f * s, c.x, c.y - 0.15f * s, 1.4f);
+            g.setFont (typed (9.5f));
+            g.drawText ("front  vorn", Rectangle<float> (c.x - 50.0f, c.y - s - 15.0f, 100.0f, 12.0f), Justification::centred);
+        }
+        else
+        {
+            const auto head = P ({ 0, 0, 0 }), feet = P ({ 0, 0, -1 });
+            const float h = feet.y - head.y, w = h * 0.2f;
+            g.fillEllipse (head.x - w * 0.36f, head.y - h * 0.09f, w * 0.72f, h * 0.17f);
+            g.fillRoundedRectangle (head.x - w * 0.5f, head.y + h * 0.11f, w, h * 0.42f, w * 0.3f);
+            g.fillRect (head.x - w * 0.3f, head.y + h * 0.5f, w * 0.6f, h * 0.5f);
+            g.drawLine (head.x + w * 0.5f, head.y, head.x + w * 0.95f, head.y, 1.4f);   // looking to the front
+            g.setFont (typed (9.5f));
+            g.drawText ("front  vorn", Rectangle<float> (c.x + s - 70.0f, c.y - s - 15.0f, 70.0f, 12.0f), Justification::centredRight);
+            g.drawText ("floor", Rectangle<float> (c.x - s, c.y + s + 2.0f, 60.0f, 12.0f), Justification::centredLeft);
+        }
+        Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (box.toNearestInt());
+        for (int li = 1; li >= 0; --li)
+        {
+            const Colour col = li == 0 ? ink : red;
+            Path path;
+            for (int i = 0; i <= 240; ++i)
+            {
+                const auto q = P (leitner::linePoint (li, p, st, (float) i / 240.0f));
+                if (i == 0) path.startNewSubPath (q); else path.lineTo (q);
+            }
+            g.setColour (col);
+            g.strokePath (path, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::rounded));
+            for (int k = 0; k < n; ++k)
+            {
+                const auto q = P (leitner::linePoint (li, p, st, ws[k], idx[k]));
+                g.setColour (paper); g.fillEllipse (q.x - 4.0f, q.y - 4.0f, 8.0f, 8.0f);
+                g.setColour (col);   g.drawEllipse (q.x - 4.0f, q.y - 4.0f, 8.0f, 8.0f, 1.1f);
+            }
+            auto& v = proc.space.view[li];
+            for (auto [x, y, z, gain] : { std::tuple { v.ax.load(), v.ay.load(), v.az.load(), v.ga.load() }, std::tuple { v.bx.load(), v.by.load(), v.bz.load(), v.gb.load() } })
+            {
+                if (gain < 0.02f) continue;
+                const auto q = P ({ x, y, z });
+                const float r = 4.0f + 4.0f * gain;
+                g.setColour (col.withAlpha (jlimit (0.0f, 1.0f, gain)));
+                g.fillEllipse (q.x - r, q.y - r, 2.0f * r, 2.0f * r);
+            }
+        }
+    };
+
+    heading ("GRUNDRISS  xx  PLAN, SEEN FROM ABOVE", 0);
+    view ({ 0.0f, 22.0f, W, 318.0f }, true);
+    heading ("AUFRISS  xx  ELEVATION, SEEN FROM THE SIDE", 352);
+    view ({ 0.0f, 374.0f, W, 222.0f }, false);
+
+    // the sheet's typed caption
+    g.setColour (ink);
+    g.setFont (typed (11.0f));
+    const int fig = p.figure;
+    const String pts = p.points >= leitner::kMaxPoints ? String ("a continuous line") : String (n) + " loudspeakers";
+    const String lines[] = {
+        String::fromUTF8 (leitner::figureNames()[fig]) + "  -  " + leitner::figureEnglish()[fig],
+        pts + ", legato " + String (roundToInt (p.legato * 100.0f)) + " %, one pass " + String (p.seconds, 2) + " s",
+        "sound as a building material: a sound sent from loudspeaker",
+        "to loudspeaker draws a line, and lines make a space",
+    };
+    for (int i = 0; i < 4; ++i)
+    {
+        g.setColour (i < 2 ? ink : faint);
+        g.drawText (lines[i], 0, 610 + i * 16, getWidth(), 15, Justification::centredLeft);
     }
-    // where the pass has got to
-    double u = (double) proc.space.phaseView.load() + (line == 1 ? 0.5 * (double) p.counter : 0.0); u -= std::floor (u);
-    g.setColour (ink.withAlpha (0.6f));
-    g.drawLine (X ((float) u), lane.getY() - 5.0f, X ((float) u), lane.getBottom() + 5.0f, 1.0f);
+}
+
+// Xenakis's sheet, right to left
+void Chance::poll()
+{
+    const auto st = proc.space.stateNow();
+    if (st.pass == seenPass) return;
+    seenPass = st.pass;
+    history.push_back ({ proc.space.passLength.load(), st.dTurn, st.dHeight });
+    if (history.size() > 24) history.erase (history.begin());
+    repaint();
+}
+
+void Chance::paint (Graphics& g)
+{
+    const auto p = proc.readSpace();
+    const float W = (float) getWidth();
+    auto heading = [&] (const String& t, int y)
+    {
+        g.setColour (ink); g.setFont (typed (11.5f, true));
+        g.drawText (t, 0, y, getWidth(), 18, Justification::centredRight);
+        g.drawLine (0.0f, (float) y + 18.0f, W, (float) y + 18.0f, 1.2f);
+    };
+    auto caption = [&] (const String& t, int y, bool strong = true)
+    {
+        g.setColour (strong ? ink : faint); g.setFont (typed (11.0f));
+        g.drawText (t, 0, y, getWidth(), 15, Justification::centredRight);
+    };
+
+    // the sieve: one circle per loudspeaker of the raster, filled where it sounds, the first on the right
+    heading ("SIEB  xx  SIEVE: WHICH LOUDSPEAKERS SOUND", 0);
+    {
+        const int K = jlimit (2, leitner::kMaxPoints - 1, p.points >= leitner::kMaxPoints ? 32 : p.points);
+        const float step = (W - 16.0f) / (float) jmax (1, K - 1);
+        int sounding = 0;
+        for (int k = 0; k < K; ++k)
+        {
+            const float x = W - 8.0f - step * (float) k, y = 46.0f;
+            const bool on = leitner::inSieve (p.sieve, k);
+            sounding += on ? 1 : 0;
+            g.setColour (ink);
+            if (on) g.fillEllipse (x - 4.5f, y - 4.5f, 9.0f, 9.0f); else g.drawEllipse (x - 4.0f, y - 4.0f, 8.0f, 8.0f, 1.0f);
+            if (K <= 16 || k % 4 == 0)
+            {
+                g.setFont (typed (9.0f)); g.setColour (faint);
+                g.drawText (String (k), Rectangle<float> (x - 10.0f, y + 7.0f, 20.0f, 11.0f), Justification::centred);
+            }
+        }
+        caption (String (leitner::sieveNames()[p.sieve]) + (p.sieve == 0 ? "" : "  (unions of residue classes)") + ":  " + String (sounding) + " of " + String (K) + " sound", 70);
+    }
+
+    // chance: the length of each of the last passes, the newest on the left
+    heading ("ZUFALL  xx  CHANCE: THE LENGTH OF EACH PASS", 102);
+    {
+        const Rectangle<float> area (0.0f, 128.0f, W, 170.0f);
+        g.setColour (ink);
+        g.drawLine (area.getX(), area.getBottom(), area.getRight(), area.getBottom(), 1.0f);
+        const float unit = area.getHeight() / 4.0f;                    // bars up to four times the pass
+        const float y1 = area.getBottom() - unit;
+        for (float x = 0.0f; x < W; x += 8.0f) g.drawLine (x, y1, jmin (W, x + 4.0f), y1, 0.7f);
+        if (history.empty()) { g.setFont (typed (9.5f)); g.setColour (faint); g.drawText ("(waiting for a pass to end)", area.toNearestInt(), Justification::centred); }
+        const float bw = W / 24.0f;
+        for (size_t i = 0; i < history.size(); ++i)
+        {
+            const size_t age = history.size() - 1 - i;                 // 0: the newest
+            const float x = (float) age * bw;
+            const float h = jmin (area.getHeight(), history[i].length * unit);
+            g.setColour (age == 0 ? red : ink);
+            g.fillRect (Rectangle<float> (x + 2.0f, area.getBottom() - h, bw - 4.0f, h));
+        }
+        {   // (drawn over the bars, on paper)
+            const Rectangle<float> label (W - 96.0f, y1 - 15.0f, 94.0f, 13.0f);
+            g.setColour (paper); g.fillRect (label);
+            g.setFont (typed (9.5f)); g.setColour (faint);
+            g.drawText ("the pass as set", label, Justification::centredRight);
+        }
+        caption (p.chance <= 0.0f ? String ("chance 0 %: every pass the same length")
+                                  : "chance " + String (roundToInt (p.chance * 100.0f)) + " %: lengths by an exponential law, as in his stochastic music", 304);
+    }
+
+    // the walk: where the steps have taken the figure, turn across and height up, the trail of the last passes
+    heading ("IRRFAHRT  xx  WALK: WHERE CHANCE HAS STEPPED", 336);
+    {
+        const Rectangle<float> area (0.0f, 362.0f, W, 232.0f);
+        g.setColour (ink);
+        g.drawRect (area, 1.0f);
+        g.setColour (faint);
+        g.drawLine (area.getCentreX(), area.getY(), area.getCentreX(), area.getBottom(), 0.7f);
+        g.drawLine (area.getX(), area.getCentreY(), area.getRight(), area.getCentreY(), 0.7f);
+        g.setFont (typed (9.5f));
+        g.drawText ("turned left", area.reduced (4.0f).toNearestInt(), Justification::centredLeft);
+        g.drawText ("turned right", area.reduced (4.0f).toNearestInt(), Justification::centredRight);
+        g.drawText ("higher", area.reduced (4.0f).toNearestInt(), Justification::centredTop);
+        g.drawText ("lower", area.reduced (4.0f).toNearestInt(), Justification::centredBottom);
+        auto at = [&] (float turnDeg, float h)
+        {
+            return Point<float> (area.getCentreX() - jlimit (-1.0f, 1.0f, turnDeg / 90.0f) * area.getWidth() * 0.46f,
+                                 area.getCentreY() - jlimit (-1.0f, 1.0f, h / 0.9f) * area.getHeight() * 0.44f);
+        };
+        Path trail;
+        for (size_t i = 0; i < history.size(); ++i)
+        {
+            const auto q = at (history[i].turn, history[i].height);
+            if (i == 0) trail.startNewSubPath (q); else trail.lineTo (q);
+        }
+        g.setColour (ink);
+        g.strokePath (trail, PathStrokeType (1.2f));
+        for (size_t i = 0; i < history.size(); ++i)
+        {
+            const auto q = at (history[i].turn, history[i].height);
+            g.drawEllipse (q.x - 3.0f, q.y - 3.0f, 6.0f, 6.0f, 1.0f);
+        }
+        const auto st = proc.space.stateNow();
+        const auto now = at (st.dTurn, st.dHeight);
+        g.setColour (red);
+        g.fillEllipse (now.x - 5.0f, now.y - 5.0f, 10.0f, 10.0f);
+        caption (p.walk <= 0.0f ? String ("walk 0 %: the figure stays where it is set")
+                                : "walk " + String (roundToInt (p.walk * 100.0f)) + " %: a Gaussian step every pass, pulled gently home", 600);
+    }
+    caption (p.scatter <= 0.0f ? String ("scatter 0 %: every loudspeaker on the line")
+                               : "scatter " + String (roundToInt (p.scatter * 100.0f)) + " %: each loudspeaker thrown off the line, a cloud of points", 626);
+    caption ("he filled rooms with sound by calculation and chance", 650, false);
 }
 
 //==============================================================================
@@ -318,9 +510,7 @@ void Room::paint (Graphics& g)
 //==============================================================================
 namespace
 {
-const char* const stageTitle[fp::numStages] = { "SPECTRAL SMEAR", "PITCH", "FORMANT", "GRAINS", "JI DELAY", "REVERB", "COMPANDER" };
-const char* const stageWord[fp::numStages] = { "smear", "pitch", "formant", "grains", "delay", "reverb", "comp" };
-constexpr int kRow = 20, kColW = 212;
+constexpr int kRow = 20;
 const Rectangle<int> sheetL (12, 12, 464, 766), sheetC (488, 12, 524, 766), sheetR (1024, 12, 464, 766);
 }
 
@@ -352,100 +542,16 @@ LeitnerEditor::LeitnerEditor (LeitnerProcessor& p) : AudioProcessorEditor (&p), 
     {
         LeitnerEditor& ed; int x, y, w; bool mirrored;
         void add (Component* c, int h = kRow) { c->setBounds (x, y, w, h); ed.parts.add (c); ed.content.addAndMakeVisible (c); y += h; }
-        void head (const String& t, int stage) { ed.headings.push_back ({ t, { x, y, w, 18 }, stage, mirrored }); y += 24; }
-        void fx (const char* id, const String& name)
-        {
-            auto* r = new lt::Rule (*ed.proc.apvts.getParameter (id), ed.proc.apvts.getParameter (ids::att (id)), name, mirrored);
-            if (const int mi = modIndexOf (id); mi >= 0) r->live = ed.proc.modNorm[(size_t) mi].get();
-            add (r);
-        }
         void rule (RangedAudioParameter* prm, const String& name) { add (new lt::Rule (*prm, nullptr, name, mirrored)); }
         void choice (RangedAudioParameter* prm, const String& name, int nameW = 66) { auto* c = new lt::Choice (*prm, name, mirrored); c->nameW = nameW; add (c); }
         void check (RangedAudioParameter* prm, const String& name) { add (new lt::Check (*prm, name, mirrored)); }
         void gap() { y += 14; }
     };
-    auto& ap = proc.apvts;
+    // the side sheets: after Leitner on the left, after Xenakis on the right
+    plan.setBounds (26, 74, 436, 676);
+    chance.setBounds (designW - 26 - 436, 74, 436, 676);
+    content.addAndMakeVisible (plan); content.addAndMakeVisible (chance);
 
-    // the left sheet: the first half of the sound program
-    {
-        Column a { *this, 26, 74, kColW, false };
-        a.head (stageTitle[fp::stGate], fp::stGate);
-        for (auto [id, n] : { std::pair { ids::sgCutoff, "cutoff" }, { ids::sgAttack, "attack" }, { ids::sgSmear, "smear" }, { ids::sgKnee, "knee" },
-                              { ids::sgBlur, "blur" }, { ids::sgScatter, "scatter" }, { ids::sgTilt, "tilt" }, { ids::sgMix, "mix" } }) a.fx (id, n);
-        a.check (ap.getParameter (ids::sgFreeze), "spectral freeze"); a.gap();
-        a.head (stageTitle[fp::stPitch], fp::stPitch);
-        for (auto [id, n] : { std::pair { ids::psShift, "shift" }, { ids::psGrain, "grain" }, { ids::psFeedback, "feedback" }, { ids::psMix, "mix" } }) a.fx (id, n);
-        a.choice (ap.getParameter (ids::psScale), "scale", 40);
-
-        Column b { *this, 26 + kColW + 14, 74, kColW, false };
-        b.head (stageTitle[fp::stFormant], fp::stFormant);
-        for (auto [id, n] : { std::pair { ids::fmVowel, "vowel" }, { ids::fmShift, "shift" }, { ids::fmRes, "resonance" }, { ids::fmMix, "mix" } }) b.fx (id, n);
-        b.gap();
-        b.head (stageTitle[fp::stDelay], fp::stDelay);
-        for (auto [id, n] : { std::pair { ids::dlTime, "time" }, { ids::dlFeedback, "feedback" }, { ids::dlTone, "tone" }, { ids::dlMix, "mix" } }) b.fx (id, n);
-        b.gap();
-        b.head (stageTitle[fp::stReverb], fp::stReverb);
-        for (auto [id, n] : { std::pair { ids::rvDecay, "decay" }, { ids::rvTone, "tone" }, { ids::rvMix, "mix" } }) b.fx (id, n);
-    }
-    // the right sheet: the second half, reversed, block for block the same sizes as the left
-    {
-        Column a { *this, designW - 26 - kColW, 74, kColW, true };
-        a.head (stageTitle[fp::stGrains], fp::stGrains);
-        for (auto [id, n] : { std::pair { ids::grSize, "size" }, { ids::grDensity, "density" }, { ids::grPosition, "position" }, { ids::grSpray, "spray" },
-                              { ids::grWidth, "rand pan" }, { ids::grReverse, "reverse" }, { ids::grOctave, "octave" }, { ids::grFade, "freeze fade" }, { ids::grMix, "mix" } }) a.fx (id, n);
-        a.gap();
-        a.head ("WASSER  xx  GRAIN FREEZE, WATER", -1);
-        a.check (ap.getParameter (ids::grFreeze), "freeze the grains");
-        a.check (ap.getParameter (ids::grRandOct), "random octave");
-        shapeBtn.setButtonText ("grain shape: saw");
-        shapeBtn.setBounds (a.x, a.y + 1, kColW, kRow - 2);
-        a.y += kRow;
-        shapeBtn.onClick = [this]
-        {
-            PopupMenu m;
-            static const char* const names[] = { "saw", "bell", "triangle", "reverse", "pulse" };
-            for (int i = 0; i < 5; ++i) m.addItem (i + 1, names[i]);
-            m.showMenuAsync (PopupMenu::Options().withTargetComponent (shapeBtn), [this] (int r)
-            {
-                if (r <= 0) return;
-                float t[CloudfinProcessor::kShapeN];
-                fp::GrainShifter::makeShape (r - 1, t);
-                proc.setGrainShape (t);
-                shapeBtn.setButtonText ("grain shape: " + String (names[r - 1]));
-            });
-        };
-        content.addAndMakeVisible (shapeBtn);
-        a.rule (ap.getParameter (ids::hydroLevel), "hydrophone");
-        a.choice (ap.getParameter (ids::hydroInto), "goes to", 52);
-
-        Column b { *this, designW - 26 - 2 * kColW - 14, 74, kColW, true };
-        b.head (stageTitle[fp::stComp], fp::stComp);
-        for (auto [id, n] : { std::pair { ids::cpThresh, "threshold" }, { ids::cpRatio, "ratio" }, { ids::cpBelow, "below" }, { ids::cpMakeup, "makeup" } }) b.fx (id, n);
-        b.gap();
-        b.head ("COMPANDER, ITS TIMES", -1);
-        for (auto [id, n] : { std::pair { ids::cpAttack, "attack" }, { ids::cpRelease, "release" }, { ids::cpMix, "mix" } }) b.fx (id, n);
-        b.y += kRow;   // (the delay opposite has a fourth line)
-        b.gap();
-        b.head ("ZUFALL  xx  LOOP, DRIFT", -1);
-        b.fx (ids::masterFb, "feedback");
-        b.rule (ap.getParameter (ids::modRate), "drift rate");
-        b.rule (ap.getParameter (ids::modSlew), "drift slew");
-    }
-    // the lower half of the side sheets: the pulse layer, and each line's pulses drawn out
-    {
-        constexpr int y0 = 470;
-        Column a { *this, 26 + kColW + 14, y0, kColW, false };
-        a.head (String (CharPointer_UTF8 ("PULSE  xx  after Fell, L\xc3\xa1z\xc3\xa1r")), -1);
-        a.rule (proc.pulse, "pulse"); a.rule (proc.pulseRate, "rate"); a.rule (proc.pulseBend, "bend"); a.rule (proc.pulseWidth, "width");
-        a.choice (proc.cell, "cell");
-        Column b { *this, designW - 26 - 2 * kColW - 14, y0, kColW, true };
-        b.head ("after Fell, Kindohm  xx  PATTERN", -1);
-        b.rule (proc.rotate, "rotate"); b.rule (proc.hits, "hits"); b.rule (proc.steps, "steps"); b.rule (proc.drop, "drop");
-        b.choice (proc.jux, "jux", 30);
-        strip1.setBounds (26, y0 + 2, kColW, 122);
-        strip2.setBounds (designW - 26 - kColW, y0 + 2, kColW, 122);
-        content.addAndMakeVisible (strip1); content.addAndMakeVisible (strip2);
-    }
     // the middle sheet, under the room: the space, in two facing columns
     {
         Column a { *this, 506, 474, 238, false };
@@ -514,7 +620,7 @@ void LeitnerEditor::paintSheets (Graphics& g)
                               : String ("stereo output: a left-right fold only. Give the track 16 to 64 channels.");
     g.drawText (out, mid.getX(), 50, mid.getWidth(), 14, Justification::centred);
     g.setColour (lt::faint);
-    g.drawText (String (CharPointer_UTF8 ("Cloudfin as a sound space, after Leitner, Xenakis, Fell, L\xc3\xa1z\xc3\xa1r and Kindohm")), mid.getX(), 65, mid.getWidth(), 14, Justification::centred);
+    g.drawText ("a sound space after Bernhard Leitner and Iannis Xenakis", mid.getX(), 65, mid.getWidth(), 14, Justification::centred);
 
     const int fig = proc.figure->getIndex();
     g.setColour (lt::ink);
@@ -526,53 +632,24 @@ void LeitnerEditor::paintSheets (Graphics& g)
     g.setColour (lt::faint);
     g.drawText ("drag the room to turn it  xxxxx  double-click: from the front again", mid.getX(), 407, mid.getWidth(), 14, Justification::centred);
 
-    // the order of the effects, centred
-    g.setFont (typed (11.0f));
-    const auto order = proc.getOrder();
-    int widths[fp::numStages], total = 0;
-    for (int i = 0; i < fp::numStages; ++i) { widths[i] = roundToInt (GlyphArrangement::getStringWidth (typed (11.0f), stageWord[order[(size_t) i]])) + 6; total += widths[i] + (i > 0 ? 14 : 0); }
-    orderWords.clear();
-    int x = designW / 2 - total / 2;
-    const int oy = 712;
-    g.setColour (lt::ink);
-    for (int i = 0; i < fp::numStages; ++i)
-    {
-        if (i > 0) { g.drawText (">", x, oy, 14, 18, Justification::centred); x += 14; }
-        orderWords.push_back ({ x, oy, widths[i], 18 });
-        g.drawText (stageWord[order[(size_t) i]], x, oy, widths[i], 18, Justification::centred);
-        g.drawLine ((float) x + 2.0f, (float) oy + 16.0f, (float) (x + widths[i]) - 2.0f, (float) oy + 16.0f, 0.7f);
-        x += widths[i];
-    }
     g.setColour (lt::faint);
     g.setFont (typed (10.0f));
-    g.drawText ("the sound program runs in this order (click a word to move it earlier)", mid.getX(), 698, mid.getWidth(), 13, Justification::centred);
+    g.drawText ("the sound itself is not changed: Leitner only says where it is", mid.getX(), 708, mid.getWidth(), 13, Justification::centred);
 
     // the side sheets
     g.setColour (lt::ink);
     g.setFont (typed (12.0f, true));
-    g.drawText ("SOUND PROGRAM I  xxxxx  TON-PROGRAMM", 26, 26, 430, 16, Justification::centredLeft);
-    g.drawText ("TON-PROGRAMM  xxxxx  SOUND PROGRAM II", designW - 26 - 430, 26, 430, 16, Justification::centredRight);
+    g.drawText ("TON-RAUM  xxxxx  SOUND SPACE", 26, 26, 436, 16, Justification::centredLeft);
+    g.drawText ("STOCHASTIC SPACE  xxxxx  XENAKIS", designW - 26 - 436, 26, 436, 16, Justification::centredRight);
     g.setFont (typed (10.5f));
     g.setColour (lt::faint);
-    g.drawText ("click or drag along a line to set it", 26, 46, 430, 14, Justification::centredLeft);
-    g.drawText ("alt-drag a line to set its drift (red)", designW - 26 - 430, 46, 430, 14, Justification::centredRight);
-    g.drawText ("double-click a line to put it back", 26, 754, 430, 14, Justification::centredLeft);
-    g.drawText ("alt-double-click: no drift", designW - 26 - 430, 754, 430, 14, Justification::centredRight);
-
-    for (auto& h : headings)
-    {
-        g.setColour (lt::ink);
-        g.setFont (typed (11.5f, true));
-        String t = h.text;
-        if (h.stage >= 0)
-            for (int i = 0; i < fp::numStages; ++i)
-                if (order[(size_t) i] == h.stage) t = h.mirrored ? t + "  " + String (i + 1) : String (i + 1) + "  " + t;
-        g.drawText (t, h.area, h.mirrored ? Justification::centredRight : Justification::centredLeft);
-        g.drawLine ((float) h.area.getX(), (float) h.area.getBottom(), (float) h.area.getRight(), (float) h.area.getBottom(), 1.2f);
-    }
+    g.drawText ("after Bernhard Leitner, Ton-Raum, 1969 to now", 26, 46, 436, 14, Justification::centredLeft);
+    g.drawText ("after Iannis Xenakis, Polytopes, 1967 to 1978", designW - 26 - 436, 46, 436, 14, Justification::centredRight);
+    g.drawText ("line 1 black, the left channel; line 2 red, the right", 26, 754, 436, 14, Justification::centredLeft);
+    g.drawText ("set on the middle sheet: chance, walk, scatter, sieve", designW - 26 - 436, 754, 436, 14, Justification::centredRight);
 }
 
-// the programs: Leitner's own, Cloudfin's sound programs, yours, and saving
+// the programs: after Leitner, after Xenakis, yours, and saving
 void LeitnerEditor::programMenu()
 {
     PopupMenu m; String group;
@@ -602,24 +679,11 @@ void LeitnerEditor::programMenu()
     });
 }
 
-void LeitnerEditor::clickOrder (Point<int> pt)
-{
-    for (int i = 1; i < (int) orderWords.size(); ++i)
-        if (orderWords[(size_t) i].contains (pt))
-        {
-            auto o = proc.getOrder();
-            std::swap (o[(size_t) i], o[(size_t) i - 1]);
-            proc.setOrder (o);
-            content.repaint();
-        }
-}
-
 void LeitnerEditor::timerCallback()
 {
-    room.repaint(); strip1.repaint(); strip2.repaint();
-    const auto packed = CloudfinProcessor::packOrder (proc.getOrder());
+    room.repaint(); plan.repaint(); chance.poll(); chance.repaint();
     const int fig = proc.figure->getIndex(), out = proc.orderNow.load() * 100 + proc.channelsNow.load();
-    if (packed != seenOrder || fig != seenFigure || out != seenOut) { seenOrder = packed; seenFigure = fig; seenOut = out; content.repaint(); }
+    if (fig != seenFigure || out != seenOut) { seenFigure = fig; seenOut = out; content.repaint(); }
     if (const int pr = proc.getCurrentProgram(); pr != seenProgram) { if (seenProgram >= 0) userShown.clear(); seenProgram = pr; }
     const String name = "program: " + (userShown.isNotEmpty() ? userShown : proc.getProgramName (proc.getCurrentProgram()));
     if (presetBtn.getButtonText() != name) presetBtn.setButtonText (name);
