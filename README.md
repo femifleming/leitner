@@ -1,4 +1,6 @@
-# Leitner
+<p align="center"><img src="docs/icon.png" width="128" alt="leitner icon"></p>
+
+# leitner
 
 A spatialization plug-in after **Bernhard Leitner** and **Iannis Xenakis**. The sound you give it travels through the room round the listener as two lines of sound, after Leitner's Ton-Raum work: switched from loudspeaker to loudspeaker, drawing figures he built and drew, with the chance, random walks, clouds of points and sieves of Xenakis. It does not change the sound itself: it only says where the sound is.
 
@@ -28,7 +30,7 @@ brew trust --tap femifleming/tap
 brew install --cask femifleming/tap/leitner
 ```
 
-Or download `Leitner-macOS.zip`, `Leitner-Windows.zip` or `Leitner-Linux.tar.gz` from the [releases](https://github.com/femifleming/Leitner/releases) and copy the plug-ins into your plug-in folders (the manual lists them). The builds are signed but not notarised: on macOS, the Homebrew cask clears the download quarantine for you.
+Or download `Leitner-macOS.zip`, `Leitner-Windows.zip` or `Leitner-Linux.tar.gz` from the [releases](https://github.com/femifleming/leitner/releases) and copy the plug-ins into your plug-in folders (the manual lists them). The builds are signed but not notarised: on macOS, the Homebrew cask clears the download quarantine for you.
 
 ## Routing it to a decoder
 
@@ -111,7 +113,7 @@ Size, height, turn, apart, the mirror image, the raster and all of Xenakis's cha
 ## Build
 
 ```sh
-git clone --recursive https://github.com/femifleming/Leitner.git
+git clone --recursive https://github.com/femifleming/leitner.git
 cd Leitner
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target Leitner_All
@@ -121,7 +123,7 @@ cmake --build build --config Release --target Leitner_All
 
 ## History
 
-Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/Cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space. 0.4 added a fifteenth figure, your own, drawn in three dimensions; sessions from 0.2 and 0.3 open on the figure they had (a host's automation of *figure* made with 0.3 may point one figure along).
+Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space. 0.4 added a fifteenth figure, your own, drawn in three dimensions; sessions from 0.2 and 0.3 open on the figure they had (a host's automation of *figure* made with 0.3 may point one figure along).
 
 ## Credits and notes
 
