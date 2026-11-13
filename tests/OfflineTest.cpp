@@ -219,12 +219,70 @@ int main (int argc, char** argv)
 
         // a session from Leitner 0.2: Cloudfin's state with the space's values as attributes
         XmlElement old ("CloudfinState");
-        old.setAttribute ("spFigure", p.figure->convertTo0to1 ((float) leitner::fgSpiral));
+        old.setAttribute ("spFigure", (double) leitner::fgSpiral / 13.0);   // (then there were 14 figures)
         old.setAttribute ("spPoints", p.points->convertTo0to1 (12.0f));
         old.setAttribute ("dlMix", 0.5);
         MemoryBlock mb; AudioProcessor::copyXmlToBinary (old, mb);
         LeitnerProcessor r; r.setStateInformation (mb.getData(), (int) mb.getSize());
         check (r.figure->getIndex() == leitner::fgSpiral && r.points->get() == 12, "a session saved by Leitner 0.2 opens with its space");
+    }
+    {   // your own figure: the sound goes where you drew it, at your points if you ask, and it is kept with the session
+        LeitnerProcessor p; dry (p);
+        leitner::Drawn d; d.count = 4; d.closed = true; d.curved = false; d.atPoints = true;
+        d.pt[0] = { 0.0f, 0.9f, 0.3f }; d.pt[1] = { 0.0f, 0.0f, 0.9f }; d.pt[2] = { 0.0f, -0.9f, -0.3f }; d.pt[3] = { -0.9f, 0.0f, 0.0f };
+        p.setDrawing (d);
+        setP (p.figure, (float) leitner::fgDrawn); setP (p.apart, 0.0f); setP (p.size, 1.0f); setP (p.legato, 0.0f); setP (p.seconds, 2.0f);
+        const auto a = run (p, 4.0, true, false);
+        // with no legato and the speakers at the points, it should sound from the four points, one after another
+        std::set<int> places; int other = 0, n = 0;
+        for (int i = 9600; i + 480 < a.getNumSamples(); i += 480)
+        {
+            const auto dir = directionOf (a, i, 480);
+            int best = -1; float bestD = 1.0e9f;
+            for (int k = 0; k < 4; ++k) { const auto w = d.pt[k].normalised(); const float dd = (dir - w).length(); if (dd < bestD) { bestD = dd; best = k; } }
+            ++n;
+            if (bestD < 0.08f) places.insert (best); else ++other;
+        }
+        check (places.size() == 4 && other < n / 5, String::formatted ("your drawing, 4 points as loudspeakers: it sounds from %d of them (%d of %d moments elsewhere)", (int) places.size(), other, n));
+
+        // a held line on an open drawing sits at its first point
+        LeitnerProcessor h; dry (h);
+        leitner::Drawn e; e.count = 3; e.closed = false; e.pt[0] = { 0.2f, 0.6f, 0.5f }; e.pt[1] = { 0.7f, 0.0f, 0.0f }; e.pt[2] = { 0.0f, -0.5f, -0.5f };
+        h.setDrawing (e);
+        setP (h.figure, (float) leitner::fgDrawn); setP (h.apart, 0.0f); setP (h.size, 1.0f); setP (h.hold, 1.0f); setP (h.points, (float) leitner::kMaxPoints);
+        const auto b = run (h, 0.5, true, false);
+        const auto dir = directionOf (b, 12000, 8000), want = e.pt[0].normalised();
+        check ((dir - want).length() < 0.02f, String::formatted ("held at the start of your line: (%.3f, %.3f, %.3f), drawn (%.3f, %.3f, %.3f)", dir.x, dir.y, dir.z, want.x, want.y, want.z));
+
+        // even speed: the table's steps are all the same length
+        const auto& pe = h.drawing();
+        float lo = 1.0e9f, hi = 0.0f;
+        for (int k = 0; k < leitner::Drawn::kTable; ++k) { const float l = (pe.table[k + 1] - pe.table[k]).length(); lo = std::min (lo, l); hi = std::max (hi, l); }
+        check (hi < lo * 1.05f, String::formatted ("the line moves along your drawing at an even speed (steps %.4f to %.4f)", lo, hi));
+
+        MemoryBlock mb; p.getStateInformation (mb);
+        LeitnerProcessor q; q.setStateInformation (mb.getData(), (int) mb.getSize());
+        const auto& r = q.drawing();
+        bool same = r.count == 4 && r.closed && ! r.curved && r.atPoints;
+        for (int k = 0; k < 4 && same; ++k) same = (r.pt[k] - d.pt[k]).length() < 1.0e-3f;
+        check (same && q.figure->getIndex() == leitner::fgDrawn, "your drawing comes back with the session");
+
+        // a session saved by 0.3 (14 figures) opens on the same figure
+        XmlElement old ("LEITNER"); old.setAttribute ("version", 3); old.setAttribute ("spFigure", (double) leitner::fgPolytope / 13.0);
+        MemoryBlock ob; AudioProcessor::copyXmlToBinary (old, ob);
+        LeitnerProcessor o; o.setStateInformation (ob.getData(), (int) ob.getSize());
+        check (o.figure->getIndex() == leitner::fgPolytope, "a session saved by Leitner 0.3 opens on its figure");
+
+        // starting from a figure, and a freehand stroke thinned to at most 64 points
+        LeitnerProcessor f; lt::Drawing dr (f);
+        dr.fromFigure (leitner::fgCube);
+        check (f.drawing().count == 8 && f.drawing().closed && ! f.drawing().curved, "the sound cube as a drawing: its 8 corners, closed, straight");
+        std::vector<leitner::Vec3> stroke;
+        for (int i = 0; i <= 2000; ++i) { const float t = (float) i / 2000.0f * 6.2831853f; stroke.push_back ({ 0.8f * std::cos (t), 0.8f * std::sin (3.0f * t), 0.5f * std::sin (t) }); }
+        dr.begin(); dr.setStroke (stroke, true);   // (the window begins every change, for undo)
+        check (f.drawing().count >= 8 && f.drawing().count <= leitner::kMaxDrawn && f.drawing().closed, String::formatted ("a freehand stroke of 2001 points becomes %d, a closed loop", f.drawing().count));
+        dr.undo();
+        check (f.drawing().count == 8, "undo");
     }
     {   // the input is not changed: held still and continuous, the omni channel is the input times one gain
         LeitnerProcessor p; dry (p);
@@ -250,12 +308,20 @@ int main (int argc, char** argv)
     {   // the window: from the front, turned, and one of Xenakis's figures; and how nearly its two halves mirror
         struct Shot { int figure; float yaw, pitch, scatter; const char* name; };
         const Shot shots[] = { { leitner::fgGate, 0.0f, 0.0f, 0.0f, "front" }, { leitner::fgSoundcube, 38.0f, 24.0f, 0.0f, "turned" },
-                               { leitner::fgParaboloid, -30.0f, 18.0f, 0.0f, "paraboloid" }, { leitner::fgPolytope, 25.0f, 30.0f, 0.4f, "polytope" }, { leitner::fgCircle, 30.0f, 35.0f, 0.0f, "xenakis" } };
+                               { leitner::fgParaboloid, -30.0f, 18.0f, 0.0f, "paraboloid" }, { leitner::fgPolytope, 25.0f, 30.0f, 0.4f, "polytope" }, { leitner::fgCircle, 30.0f, 35.0f, 0.0f, "xenakis" },
+                               { leitner::fgDrawn, 32.0f, 22.0f, 0.0f, "drawn" } };
         for (auto& sh : shots)
         {
             LeitnerProcessor p;
             setP (p.figure, (float) sh.figure); setP (p.seconds, 3.0f); setP (p.points, 12.0f); setP (p.scatter, sh.scatter);
             if (sh.figure == leitner::fgGate) setP (p.counter, 1.0f);
+            if (sh.figure == leitner::fgDrawn)
+            {
+                // a knot of a path, picked at its fifth point
+                leitner::Drawn d; d.count = 12;
+                for (int k = 0; k < 12; ++k) { const float t = (float) k / 12.0f * 6.2831853f; d.pt[k] = { 0.55f * (std::sin (t) + 0.6f * std::sin (2.0f * t)), 0.55f * (std::cos (t) - 0.6f * std::cos (2.0f * t)), -0.55f * std::sin (3.0f * t) }; }
+                p.setDrawing (d); setP (p.apart, 0.0f); setP (p.points, 24.0f);
+            }
             const bool xen = String (sh.name) == "xenakis" || String (sh.name) == "polytope";
             if (xen) { setP (p.chance, 0.8f); setP (p.walk, 0.6f); setP (p.sieve, 2.0f); setP (p.points, 16.0f); setP (p.seconds, 0.25f); }
             p.viewYaw.store (sh.yaw); p.viewPitch.store (sh.pitch);

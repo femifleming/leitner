@@ -94,6 +94,19 @@ The **program** button lists eighteen spaces, eleven after Leitner and seven aft
 | Paraboloid | straight lines zigzagging between two skew edges, sweeping a curved surface | Xenakis: the glissandi of Metastaseis and the ruled surfaces of the Philips Pavilion |
 | Terretektorh | a flat spiral in towards you, faster and faster, and out again | Xenakis: the accelerating rotations of sound in Terretektorh |
 | Polytope | eight points thrown over the sphere, new ones every pass | Xenakis: the points of light and sound of the Polytopes |
+| Eigene Zeichnung | your own path, drawn in three dimensions (below) | you, drawing a space before it is built, as Leitner did |
+
+## Drawing your own figure
+
+Choose **Eigene Zeichnung** from *figure*, or press **draw your own figure** under the controls. The left-hand sheet becomes a drawing sheet with your path seen from above, from the side and from behind, and your points also appear in the room as small squares on line 1.
+
+- **click** a view to add a point (on the line: between two), **drag** a point to move it, **double-click** it (or press delete) to take it away, **cmd-Z** to undo;
+- **shift-drag** on a view, or on the room, to draw a whole new path freehand. In the room it is drawn on the plane through the middle facing you, so turn the room first to draw at any angle;
+- drag a point in the room to move it across your view of the room, at its own depth;
+- up to 64 points, as a **closed loop** or an **open** line that goes there and back, **curved** through the points or **straight** from one to the next, with the loudspeakers spread evenly by *points* or standing **at your points**;
+- **start from a figure...** turns any of the fourteen figures into points you can move.
+
+Size, height, turn, apart, the mirror image, the raster and all of Xenakis's chance work on it as on any figure, and it moves at an even speed along the path. The drawing is saved with the session and in your presets.
 
 ## Build
 
@@ -104,11 +117,11 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target Leitner_All
 ```
 
-`-DLEITNER_BUILD_TESTS=ON` adds `LeitnerTest`, which checks the harmonics, the encoded directions, the mirror image, the raster, the sieves, chance, every order, that the sound passes unchanged, the programs, presets and old sessions, and takes pictures of the window. On Linux, install JUCE's usual dependencies first (ALSA, FreeType, fontconfig, X11, OpenGL; see the build workflow).
+`-DLEITNER_BUILD_TESTS=ON` adds `LeitnerTest`, which checks the harmonics, the encoded directions, the mirror image, the raster, the sieves, chance, every order, that the sound passes unchanged, the programs, presets and old sessions, your own drawn figure (the sound follows it, it is saved, freehand strokes are thinned), and takes pictures of the window. On Linux, install JUCE's usual dependencies first (ALSA, FreeType, fontconfig, X11, OpenGL; see the build workflow).
 
 ## History
 
-Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/Cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space.
+Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/Cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space. 0.4 added a fifteenth figure, your own, drawn in three dimensions; sessions from 0.2 and 0.3 open on the figure they had (a host's automation of *figure* made with 0.3 may point one figure along).
 
 ## Credits and notes
 

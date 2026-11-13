@@ -31,7 +31,7 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <p>A spatialization plug-in after Bernhard Leitner and Iannis Xenakis: an Ambisonics encoder, 3rd to 7th order</p>
 <img src="../front.jpg">
 <p>M A N U A L <span class="x">xxxxx</span> H A N D B U C H</p>
-<p class="de">version 0.3</p>
+<p class="de">version 0.4</p>
 </div>
 
 <section>
@@ -43,12 +43,13 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <tr><td>4. The room: seeing where things are</td><td>7</td></tr>
 <tr><td>5. The space: lines of sound</td><td>8</td></tr>
 <tr><td>6. The figures</td><td>10</td></tr>
-<tr><td>7. Chance: what comes from Xenakis</td><td>11</td></tr>
-<tr><td>8. Programs, and your own presets</td><td>12</td></tr>
-<tr><td>9. Starting points</td><td>14</td></tr>
-<tr><td>10. If something seems wrong</td><td>14</td></tr>
-<tr><td>11. Every parameter</td><td>15</td></tr>
-<tr><td>12. Sources and credits</td><td>16</td></tr>
+<tr><td>7. Your own figure: drawing in three dimensions</td><td>11</td></tr>
+<tr><td>8. Chance: what comes from Xenakis</td><td>13</td></tr>
+<tr><td>9. Programs, and your own presets</td><td>14</td></tr>
+<tr><td>10. Starting points</td><td>16</td></tr>
+<tr><td>11. If something seems wrong</td><td>16</td></tr>
+<tr><td>12. Every parameter</td><td>17</td></tr>
+<tr><td>13. Sources and credits</td><td>18</td></tr>
 </table>
 <h2 style="margin-top:14mm">1. What Leitner is</h2>
 <p>Leitner is a spatialization plug-in. It does one thing: it takes the sound you give it and sends it through a room round the listener as two <b>lines of sound</b>, after the Ton-Raum work of Bernhard Leitner, with the chance, random walks, clouds of points and sieves of Iannis Xenakis. The sound itself is not changed: Leitner only says <i>where</i> it is. (Leitner called this the space program, kept apart from the sound program; here the sound program is whatever you put on the track before it.)</p>
@@ -120,7 +121,7 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <img class="fig" src="space_controls.png" style="width:70%;display:block;margin:4pt auto">
 <h3>Left column: the line in time</h3>
 <table>
-<tr><td>figure</td><td>which space the lines draw. The fourteen figures are on the next page.</td></tr>
+<tr><td>figure</td><td>which space the lines draw. The fourteen figures are on the next page; the fifteenth is your own drawing (chapter 7).</td></tr>
 <tr><td>pass</td><td>how long one pass of the figure takes, from 50 ms to a minute. There are no bars or beats anywhere in Leitner: time is in seconds, and <i>chance</i> can make every pass a different length.</td></tr>
 <tr><td>rest</td><td>how much of each pass the line spends waiting at its end before it sets off again.</td></tr>
 <tr><td>points</td><td>how many loudspeakers the figure is built from, 2 to 32. Leitner's sound did not glide: it was switched from one loudspeaker to the next. All the way up it reads <i>continuous</i> and the line moves smoothly instead.</td></tr>
@@ -161,13 +162,41 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <tr><td>Paraboloid</td><td>straight lines zigzagging between two edges that cross in the air: straight lines sweeping a curved surface.</td><td>Xenakis: the glissandi of Metastaseis, which became the ruled surfaces of the Philips Pavilion</td></tr>
 <tr><td>Terretektorh</td><td>a flat spiral from the wall in towards you, faster and faster, and out again.</td><td>Xenakis: the accelerating rotations of sound through the orchestra in Terretektorh</td></tr>
 <tr><td>Polytope</td><td>eight points thrown over the sphere and joined in turn; new points every pass.</td><td>Xenakis: the points of light and sound of the Polytopes</td></tr>
+<tr><td>Eigene Zeichnung</td><td>your own path through the room, drawn in three dimensions (chapter 7).</td><td>you, as Leitner drew his spaces on paper before they were built</td></tr>
 </table>
 <div class="two" style="width:86%;margin:auto"><div><img class="fig" src="room_paraboloid.png"><p class="cap">Paraboloid, turned to see it from the side.</p></div>
 <div><img class="fig" src="room_polytope.png"><p class="cap">Polytope with some scatter: points by chance.</p></div></div>
 </section>
 
 <section>
-<h2>7. Chance: what comes from Xenakis <span class="x">xx</span> <span class="de">Zufall</span></h2>
+<h2>7. Your own figure: drawing in three dimensions <span class="x">xx</span> <span class="de">Eigene Zeichnung</span></h2>
+<p>Leitner drew his spaces before he built them: a room in plan and elevation, the loudspeakers as small circles, the sound as a heavy line with arrows. The last figure, <b>Eigene Zeichnung</b>, lets you do the same: draw a path through the room in three dimensions, and the lines of sound follow it. Choose it from <b>figure</b>, or press <b>draw your own figure</b> under the controls (the same button then reads <b>back to</b> the figure you came from).</p>
+<p>The Leitner sheet on the left becomes the drawing sheet. It shows your path three times: <b>from above</b> (the front at the top), <b>from the side</b> (from your right, the front to the right) and <b>from behind</b> (facing the front, as the room is first seen: your left on the left). Each view moves two of the three measures of a point, so between them you can put a point anywhere in the room. The small red dot is where line 1 is now.</p>
+<div class="two"><div><img class="fig" src="sheet_drawing.png"><p class="cap">The drawing sheet: a twelve-point knot from above, from the side and from behind. The filled point is the one picked; the dashed guides run through it.</p></div>
+<div><img class="fig" src="room_drawing.png"><p class="cap">The same path in the room, turned. Your points are the small squares on line 1: drag them here too. Line 2, in red, is its mirror image.</p></div></div>
+<h3>Drawing</h3>
+<table>
+<tr><td>click</td><td>a new point. Click on the line and it goes between the two points either side; anywhere else it goes after the picked point (or at the end), at the picked point's third measure.</td></tr>
+<tr><td>drag a point</td><td>move it, in that view's two measures. The caption under the views gives the picked point's place: front, left and up, in percent of the room.</td></tr>
+<tr><td>double-click a point</td><td>take it away (or pick it and press delete). A path keeps at least two points.</td></tr>
+<tr><td>shift-drag</td><td>draw a whole new path freehand. It is thinned to the corners that matter (at most 64 points); if its ends meet it becomes a closed loop. Drawn from above it lies at ear height, from the side or behind it runs through the middle; lift and move its points in the other views.</td></tr>
+<tr><td>cmd-Z</td><td>undo (or the <b>undo</b> button), fifty steps back.</td></tr>
+</table>
+<h3>In the room</h3>
+<p>While the figure is your own, your points show in the room as small squares on line 1. Drag one to move it across your view of the room, at its own depth: turn the room to reach the depth you want. <b>Shift-drag</b> on the room draws a new path on the plane through the middle of the room that faces you, so turning the room first and then drawing gives you paths at any angle. Dragging anywhere else still turns the room; double-clicking a square takes that point away.</p>
+<h3>The buttons</h3>
+<table>
+<tr><td>a closed loop / open: there and back</td><td>a loop runs round and starts again; an open line goes to its end and comes back, as Ton-Linie does.</td></tr>
+<tr><td>curved through them / straight lines</td><td>a smooth curve through your points, or straight lines from point to point (Leitner's sheets mostly have straight ones).</td></tr>
+<tr><td>speakers by 'points' / speakers at my points</td><td>where the raster's loudspeakers stand: spread evenly along the path by <i>points</i>, or one at each of your points, so the sound jumps from point to point exactly as you placed them (with <i>legato</i> at 0). The sieve still picks among them.</td></tr>
+<tr><td>start from a figure...</td><td>replaces the drawing with one of the fourteen figures, as points you can then move: a quick way to bend a Soundcube or open up a Ton-Würfel.</td></tr>
+<tr><td>start again</td><td>a plain line from back to front, to draw from.</td></tr>
+</table>
+<p>Everything else works on your drawing as on any figure: <i>size</i> scales it, <i>height</i> raises it, <i>turn</i> swings it round, <i>apart</i> and the mirror image make line 2, and the raster, chance, walk, scatter and sieve all apply. The line moves along your path at an even speed, however unevenly you placed the points. The drawing is kept with your session and in your presets; the programs leave it alone.</p>
+</section>
+
+<section>
+<h2>8. Chance: what comes from Xenakis <span class="x">xx</span> <span class="de">Zufall</span></h2>
 <p>Iannis Xenakis composed masses of sound by calculation and probability, and placed them in space: across loudspeakers in the Philips Pavilion and the Polytopes, and among the audience in Terretektorh. Four controls and three figures here come from his ideas. They are what takes Leitner away from regular, bar-like repetition.</p>
 <table>
 <tr><td>chance</td><td><b>Stochastic time.</b> At 0 every pass takes the same time. Turned up, the length of each pass is drawn from an exponential law, the law of the gaps between chance events that Xenakis used for durations. At 100 % a pass may be a sixth of the <i>pass</i> time or four times it, and you cannot predict which.</td></tr>
@@ -192,7 +221,7 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 </section>
 
 <section>
-<h2>8. Programs, and your own presets <span class="x">xx</span> <span class="de">Programme</span></h2>
+<h2>9. Programs, and your own presets <span class="x">xx</span> <span class="de">Programme</span></h2>
 <p>The <b>program</b> button at the bottom of the middle sheet opens the list: eighteen spaces, eleven after Leitner and seven after Xenakis, and then yours. Choosing a program sets every control of the space except the Ambisonic order, which belongs to your track and stays as you have it.</p>
 <table><tr><th>Program</th><th>The space</th></tr>
 <tr><td colspan="2" style="font-weight:400;color:#8c8880">after Leitner</td></tr>
@@ -227,7 +256,7 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 </section>
 
 <section>
-<h2>9. Starting points <span class="x">xx</span> <span class="de">Anfänge</span></h2>
+<h2>10. Starting points <span class="x">xx</span> <span class="de">Anfänge</span></h2>
 <table>
 <tr><th>For</th><th>Set</th></tr>
 <tr><td>hearing the lines plainly</td><td>room 0, Ton-Linie, 8 points, legato 0. Play something steady: you will hear it switched from loudspeaker to loudspeaker.</td></tr>
@@ -237,7 +266,7 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 <tr><td>an unpredictable field</td><td>Polytope, chance 100 %, scatter 40 %, rest 20 %.</td></tr>
 <tr><td>a limping ring</td><td>Kreis, 16 points, legato 0, sieve 3/0 + 4/1, chance 60 %.</td></tr>
 </table>
-<h2 style="margin-top:12mm">10. If something seems wrong <span class="x">xx</span> <span class="de">Hilfe</span></h2>
+<h2 style="margin-top:12mm">11. If something seems wrong <span class="x">xx</span> <span class="de">Hilfe</span></h2>
 <table>
 <tr><td>I only hear plain stereo</td><td>The track has two channels. Give it 16 or more and put a decoder after Leitner. The line under the title says what is coming out.</td></tr>
 <tr><td>It sounds phasey or hollow</td><td>The decoder is not set to the same order, or expects a different normalisation. Use SN3D (AmbiX) and match the order.</td></tr>
@@ -254,11 +283,11 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 </section>
 
 <section>
-<h2>11. Every parameter <span class="x">xx</span> <span class="de">Alle Parameter</span></h2>
+<h2>12. Every parameter <span class="x">xx</span> <span class="de">Alle Parameter</span></h2>
 <h3>The space</h3>
 <table><tr><th>Name</th><th>Range</th><th>Default</th></tr>
 <tr><td>order</td><td>3rd, 4th, 5th, 6th, 7th</td><td>3rd</td></tr>
-<tr><td>figure</td><td>the fourteen figures</td><td>Ton-Linie</td></tr>
+<tr><td>figure</td><td>the fourteen figures, and your own drawing</td><td>Ton-Linie</td></tr>
 <tr><td>pass</td><td>50 ms to 60 s</td><td>4 s</td></tr>
 <tr><td>rest</td><td>0 to 90 %</td><td>0 %</td></tr>
 <tr><td>size</td><td>10 to 100 %</td><td>90 %</td></tr>
@@ -279,7 +308,7 @@ ol,ul{margin:0 0 8pt;padding-left:16pt} li{margin-bottom:3pt}
 </section>
 
 <section>
-<h2>12. Sources and credits <span class="x">xx</span> <span class="de">Quellen</span></h2>
+<h2>13. Sources and credits <span class="x">xx</span> <span class="de">Quellen</span></h2>
 <p>Leitner is an homage. It is not affiliated with or endorsed by Bernhard Leitner or the estate of Iannis Xenakis, and it contains no drawing, recording, score or text of theirs.</p>
 <h3>Bernhard Leitner</h3>
 <ul>

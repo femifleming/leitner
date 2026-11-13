@@ -129,7 +129,7 @@ void LeitnerProcessor::randomize()
 {
     Random r;
     auto set = [] (RangedAudioParameter* p, float v) { p->setValueNotifyingHost (p->convertTo0to1 (v)); };
-    set (figure, (float) r.nextInt (leitner::numFigures));
+    set (figure, (float) r.nextInt (leitner::fgDrawn));   // (any but your own)
     set (seconds, 1.0f + 14.0f * r.nextFloat() * r.nextFloat());
     set (rest, r.nextBool() ? 0.0f : 0.4f * r.nextFloat());
     const int pts[] = { 4, 6, 8, 12, 16, 24, leitner::kMaxPoints };
@@ -189,12 +189,28 @@ leitner::Params LeitnerProcessor::readSpace() const
     p.chance = chance->get(); p.walk = walk->get(); p.scatter = scatter->get(); p.sieve = sieve->getIndex();
     p.room = room->get(); p.roomDecay = roomDecay->get(); p.level = level->get();
     p.hold = hold->get();
+    p.drawn = &drawn;
     return p;
+}
+
+void LeitnerProcessor::setDrawing (const leitner::Drawn& d)
+{
+    drawn = d;
+    drawn.prepare();
+    {
+        const SpinLock::ScopedLockType l (drawnLock);
+        drawnShared = drawn;
+    }
+    ++drawnVersion;
 }
 
 void LeitnerProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     space.prepare (sampleRate);
+    {
+        const SpinLock::ScopedLockType l (drawnLock);
+        drawnAudio = drawnShared; drawnSeen = drawnVersion.load();
+    }
     stereo.setSize (2, jmax (1, samplesPerBlock), false, true, true);
 }
 
@@ -211,6 +227,10 @@ void LeitnerProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     stereo.copyFrom (1, 0, buffer, numIn > 1 && buffer.getNumChannels() > 1 ? 1 : 0, 0, n);
 
     auto p = readSpace();
+    // your drawing, if it has changed (and the window isn't handing it over this very moment)
+    if (const int v = drawnVersion.load(); v != drawnSeen)
+        if (const SpinLock::ScopedTryLockType l (drawnLock); l.isLocked()) { drawnAudio = drawnShared; drawnSeen = v; }
+    p.drawn = &drawnAudio;
 
     float* outs[fp::ambi::kCh];
     if (numOut >= 4)
@@ -246,12 +266,21 @@ void LeitnerProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 
 AudioProcessorEditor* LeitnerProcessor::createEditor() { return new LeitnerEditor (*this); }
 
-// The state: every parameter as an attribute (its 0..1 value), the program, and how the room is turned.
-// Sessions and presets from Leitner 0.2 (which kept these same attributes on Cloudfin's state) load too.
+// The state: every parameter as an attribute (its 0..1 value), the program, how the room is turned, and
+// your drawing. Sessions and presets from Leitner 0.2 (which kept these same attributes on Cloudfin's
+// state) load too. Before version 4 there were 14 figures, not 15, so the figure's 0..1 is moved over.
 void LeitnerProcessor::getStateInformation (MemoryBlock& dest)
 {
     XmlElement x ("LEITNER");
-    x.setAttribute ("version", 3);
+    x.setAttribute ("version", 4);
+    {
+        auto* d = x.createNewChildElement ("DRAWING");
+        d->setAttribute ("closed", drawn.closed); d->setAttribute ("curved", drawn.curved); d->setAttribute ("atPoints", drawn.atPoints);
+        String pts;
+        for (int i = 0; i < drawn.count; ++i)
+            pts << String (drawn.pt[i].x, 4) << " " << String (drawn.pt[i].y, 4) << " " << String (drawn.pt[i].z, 4) << (i + 1 < drawn.count ? ";" : "");
+        d->setAttribute ("points", pts);
+    }
     for (auto* prm : spaceParams) x.setAttribute (prm->getParameterID(), prm->getValue());
     x.setAttribute ("ltProgram", program.load());
     x.setAttribute ("viewYaw", viewYaw.load());
@@ -263,9 +292,26 @@ void LeitnerProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     const auto x = getXmlFromBinary (data, sizeInBytes);
     if (x == nullptr) return;
+    const bool before4 = x->getIntAttribute ("version", 2) < 4;
     for (auto* prm : spaceParams)
         if (x->hasAttribute (prm->getParameterID()))
-            prm->setValueNotifyingHost ((float) x->getDoubleAttribute (prm->getParameterID()));
+        {
+            float v = (float) x->getDoubleAttribute (prm->getParameterID());
+            if (before4 && prm == figure) v = figure->convertTo0to1 ((float) roundToInt (v * (float) (leitner::numFigures - 2)));
+            prm->setValueNotifyingHost (v);
+        }
+    if (auto* d = x->getChildByName ("DRAWING"))
+    {
+        leitner::Drawn nd;
+        nd.closed = d->getBoolAttribute ("closed", true); nd.curved = d->getBoolAttribute ("curved", true); nd.atPoints = d->getBoolAttribute ("atPoints", false);
+        for (auto& t : StringArray::fromTokens (d->getStringAttribute ("points"), ";", ""))
+        {
+            const auto c = StringArray::fromTokens (t, " ", "");
+            if (c.size() == 3 && nd.count < leitner::kMaxDrawn)
+                nd.pt[nd.count++] = { jlimit (-1.0f, 1.0f, c[0].getFloatValue()), jlimit (-1.0f, 1.0f, c[1].getFloatValue()), jlimit (-1.0f, 1.0f, c[2].getFloatValue()) };
+        }
+        if (nd.count >= 2) setDrawing (nd);
+    }
     program.store (jlimit (0, getNumPrograms() - 1, x->getIntAttribute ("ltProgram", 0)));
     if (x->hasAttribute ("viewYaw")) { viewYaw.store ((float) x->getDoubleAttribute ("viewYaw")); viewPitch.store ((float) x->getDoubleAttribute ("viewPitch")); }
 }

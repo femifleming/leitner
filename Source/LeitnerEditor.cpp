@@ -141,8 +141,8 @@ void Plan::paint (Graphics& g)
     const auto p = proc.readSpace();
     const auto st = proc.space.stateNow();
     const float W = (float) getWidth();
-    float ws[leitner::kMaxPoints]; int idx[leitner::kMaxPoints];
-    const int n = p.points < leitner::kMaxPoints ? leitner::rasterPoints (p, ws, idx) : 0;
+    float ws[leitner::kMaxRaster]; int idx[leitner::kMaxRaster];
+    const int n = leitner::continuous (p) ? 0 : leitner::rasterPoints (p, ws, idx);
 
     auto heading = [&] (const String& t, int y)
     {
@@ -368,6 +368,7 @@ void Chance::paint (Graphics& g)
 // The room is two units across (the unit sphere's box) and you stand at the middle of it. The camera
 // looks at the middle from 2.64 away: from straight behind you to begin with (the back wall then
 // comes out 0.45 of the opening, as on the sheets), and from wherever you drag it to.
+constexpr float kCamera = 2.64f;
 Room::View Room::view() const
 {
     const float yaw = proc.viewYaw.load() * leitner::kPi / 180.0f, pitch = proc.viewPitch.load() * leitner::kPi / 180.0f;
@@ -376,16 +377,79 @@ Room::View Room::view() const
 }
 Point<float> Room::project (const View& v, leitner::Vec3 p, float* scale) const
 {
-    constexpr float D = 2.64f;
+    constexpr float D = kCamera;
     const float depth = jmax (0.35f, p.dot (v.f) + D);
     const float s = (D - 1.0f) / depth;                      // 1 at the opening of the front view
     const float H = (float) getHeight() * 0.47f;
     if (scale != nullptr) *scale = s;
     return { (float) getWidth() * 0.5f + p.dot (v.r) * H * s, (float) getHeight() * 0.5f - p.dot (v.u) * H * s };
 }
-void Room::mouseDown (const MouseEvent&) { yawDown = proc.viewYaw.load(); pitchDown = proc.viewPitch.load(); }
+bool Room::editing() const { return proc.figure->getIndex() == leitner::fgDrawn; }
+// a point on the screen, on the plane through the middle of the room that faces you
+leitner::Vec3 Room::onMiddlePlane (const View& v, Point<float> q) const
+{
+    const float H = (float) getHeight() * 0.47f, s0 = (kCamera - 1.0f) / kCamera;
+    return v.r * ((q.x - (float) getWidth() * 0.5f) / (H * s0)) + v.u * (-(q.y - (float) getHeight() * 0.5f) / (H * s0));
+}
+int Room::handleAt (Point<float> q) const
+{
+    if (! editing()) return -1;
+    const auto p = proc.readSpace(); const auto st = proc.space.stateNow(); const auto V = view();
+    const auto& d = drawing.get();
+    int best = -1; float bestD = 9.0f;
+    for (int i = d.count - 1; i >= 0; --i)
+        if (const float dd = project (V, leitner::drawnToRoom (p, st, d.pt[i])).getDistanceFrom (q); dd < bestD) { bestD = dd; best = i; }
+    return best;
+}
+void Room::mouseMove (const MouseEvent& e)
+{
+    setMouseCursor (editing() && handleAt (e.position) >= 0 ? MouseCursor::UpDownLeftRightResizeCursor
+                    : editing() && e.mods.isShiftDown() ? MouseCursor::CrosshairCursor : MouseCursor::DraggingHandCursor);
+}
+void Room::mouseDown (const MouseEvent& e)
+{
+    yawDown = proc.viewYaw.load(); pitchDown = proc.viewPitch.load();
+    dragPoint = -1; stroking = false;
+    if (! editing()) return;
+    if (const int h = handleAt (e.position); h >= 0)
+    {
+        drawing.picked = h; drawing.begin(); dragPoint = h;
+        pointDown = leitner::drawnToRoom (proc.readSpace(), proc.space.stateNow(), drawing.get().pt[h]);
+        return;
+    }
+    if (e.mods.isShiftDown()) { stroking = true; stroke = { onMiddlePlane (view(), e.position) }; strokeScreen = { e.position }; }
+}
+void Room::mouseUp (const MouseEvent&)
+{
+    if (stroking && stroke.size() >= 3)
+    {
+        const auto p = proc.readSpace(); const auto st = proc.space.stateNow();
+        std::vector<leitner::Vec3> pts;
+        for (auto v : stroke) pts.push_back (leitner::roomToDrawn (p, st, v));
+        drawing.begin();
+        drawing.setStroke (pts, true);
+    }
+    stroking = false; stroke.clear(); strokeScreen.clear(); dragPoint = -1;
+    repaint();
+}
 void Room::mouseDrag (const MouseEvent& e)
 {
+    if (dragPoint >= 0)
+    {
+        // across the screen, at the point's own depth
+        const auto V = view();
+        float s = 1.0f; project (V, pointDown, &s);
+        const float k = (float) getHeight() * 0.47f * s;
+        const auto moved = pointDown + V.r * ((float) e.getDistanceFromDragStartX() / k) - V.u * ((float) e.getDistanceFromDragStartY() / k);
+        drawing.movePoint (dragPoint, leitner::roomToDrawn (proc.readSpace(), proc.space.stateNow(), moved));
+        repaint();
+        return;
+    }
+    if (stroking)
+    {
+        if (strokeScreen.back().getDistanceFrom (e.position) > 2.5f) { strokeScreen.push_back (e.position); stroke.push_back (onMiddlePlane (view(), e.position)); repaint(); }
+        return;
+    }
     float yaw = yawDown - 0.45f * (float) e.getDistanceFromDragStartX();
     while (yaw > 180.0f) yaw -= 360.0f;
     while (yaw < -180.0f) yaw += 360.0f;
@@ -393,7 +457,11 @@ void Room::mouseDrag (const MouseEvent& e)
     proc.viewPitch.store (jlimit (-30.0f, 89.0f, pitchDown + 0.4f * (float) e.getDistanceFromDragStartY()));
     repaint();
 }
-void Room::mouseDoubleClick (const MouseEvent&) { proc.viewYaw.store (0.0f); proc.viewPitch.store (0.0f); repaint(); }
+void Room::mouseDoubleClick (const MouseEvent& e)
+{
+    if (const int h = handleAt (e.position); h >= 0) { drawing.begin(); drawing.removePoint (h); return; }
+    proc.viewYaw.store (0.0f); proc.viewPitch.store (0.0f); repaint();
+}
 
 void Room::paint (Graphics& g)
 {
@@ -463,8 +531,8 @@ void Room::paint (Graphics& g)
     }
 
     // the two lines of sound: heavy, with arrows; the loudspeakers each is built from; where it is now
-    float ws[leitner::kMaxPoints]; int idx[leitner::kMaxPoints];
-    const int n = p.points < leitner::kMaxPoints ? leitner::rasterPoints (p, ws, idx) : 0;
+    float ws[leitner::kMaxRaster]; int idx[leitner::kMaxRaster];
+    const int n = leitner::continuous (p) ? 0 : leitner::rasterPoints (p, ws, idx);
     for (int li = 1; li >= 0; --li)
     {
         const Colour col = li == 0 ? ink : red;
@@ -504,7 +572,417 @@ void Room::paint (Graphics& g)
         sounding (v.ax.load(), v.ay.load(), v.az.load(), v.ga.load());
         sounding (v.bx.load(), v.by.load(), v.bz.load(), v.gb.load());
     }
+
+    // your own figure: your points, on line 1, as small squares to take hold of
+    if (editing())
+    {
+        const auto& d = drawing.get();
+        for (int i = 0; i < d.count; ++i)
+        {
+            float s; const auto c = project (V, leitner::drawnToRoom (p, st, d.pt[i]), &s);
+            const float r = jmax (3.0f, 4.5f * s);
+            const auto box = Rectangle<float> (2 * r, 2 * r).withCentre (c);
+            g.setColour (i == drawing.picked ? ink : paper); g.fillRect (box);
+            g.setColour (ink); g.drawRect (box, 1.1f);
+        }
+        if (strokeScreen.size() > 1)
+        {
+            Path sp; sp.startNewSubPath (strokeScreen[0]);
+            for (auto& q : strokeScreen) sp.lineTo (q);
+            g.setColour (ink.withAlpha (0.5f)); g.strokePath (sp, PathStrokeType (1.6f));
+        }
+    }
 }
+//==============================================================================
+// your own figure
+void Drawing::begin()
+{
+    undos.push_back (get());
+    if (undos.size() > 50) undos.erase (undos.begin());
+}
+void Drawing::set (const leitner::Drawn& d)
+{
+    proc.setDrawing (d);
+    if (picked >= get().count) picked = get().count - 1;
+    if (changed) changed();
+}
+void Drawing::undo()
+{
+    if (undos.empty()) return;
+    const auto d = undos.back(); undos.pop_back();
+    set (d);
+}
+static leitner::Vec3 clampRoom (leitner::Vec3 v) { return { jlimit (-1.0f, 1.0f, v.x), jlimit (-1.0f, 1.0f, v.y), jlimit (-1.0f, 1.0f, v.z) }; }
+void Drawing::movePoint (int i, leitner::Vec3 v)
+{
+    auto d = get();
+    if (! isPositiveAndBelow (i, d.count)) return;
+    d.pt[i] = clampRoom (v);
+    set (d);
+}
+int Drawing::insertPoint (int after, leitner::Vec3 v)
+{
+    auto d = get();
+    if (d.count >= leitner::kMaxDrawn) return -1;
+    const int at = jlimit (0, d.count, after + 1);
+    for (int k = d.count; k > at; --k) d.pt[k] = d.pt[k - 1];
+    d.pt[at] = clampRoom (v); ++d.count;
+    set (d);
+    return at;
+}
+void Drawing::removePoint (int i)
+{
+    auto d = get();
+    if (! isPositiveAndBelow (i, d.count) || d.count <= 2) return;   // (a path needs two points)
+    for (int k = i; k + 1 < d.count; ++k) d.pt[k] = d.pt[k + 1];
+    --d.count;
+    picked = -1;
+    set (d);
+}
+void Drawing::setStroke (const std::vector<leitner::Vec3>& raw, bool closeIfEndsMeet)
+{
+    using leitner::Vec3;
+    // only steps of some length, then the corners that matter (Douglas-Peucker), loosened until it fits in 64
+    std::vector<Vec3> s;
+    for (auto v : raw) if (s.empty() || (v - s.back()).length() > 0.02f) s.push_back (clampRoom (v));
+    if (s.size() < 2) return;
+    bool closed = false;
+    if (closeIfEndsMeet && s.size() >= 6 && (s.front() - s.back()).length() < 0.2f) { closed = true; s.back() = s.front(); }
+    std::vector<Vec3> kept;
+    for (float eps = 0.012f;; eps *= 1.4f)
+    {
+        std::vector<bool> keep (s.size(), false);
+        keep.front() = keep.back() = true;
+        std::function<void (size_t, size_t)> dp = [&] (size_t a, size_t b)
+        {
+            if (b <= a + 1) return;
+            const Vec3 ab = s[b] - s[a]; const float L = ab.length();
+            float worst = -1.0f; size_t at = a;
+            for (size_t i = a + 1; i < b; ++i)
+            {
+                const Vec3 ap = s[i] - s[a];
+                float d;
+                if (L < 1.0e-6f) d = ap.length();
+                else { const float t = jlimit (0.0f, 1.0f, ap.dot (ab) / (L * L)); d = (ap - ab * t).length(); }
+                if (d > worst) { worst = d; at = i; }
+            }
+            if (worst > eps) { keep[at] = true; dp (a, at); dp (at, b); }
+        };
+        dp (0, s.size() - 1);
+        kept.clear();
+        for (size_t i = 0; i < s.size(); ++i) if (keep[i]) kept.push_back (s[i]);
+        if (closed && kept.size() > 2) kept.pop_back();          // (the last is the first again)
+        if ((int) kept.size() <= leitner::kMaxDrawn) break;
+    }
+    leitner::Drawn d = get();
+    d.count = (int) kept.size();
+    for (int i = 0; i < d.count; ++i) d.pt[i] = kept[(size_t) i];
+    d.closed = closed && d.count >= 3; d.curved = true;
+    picked = -1;
+    set (d);
+}
+void Drawing::fromFigure (int f)
+{
+    using namespace leitner;
+    if (! isPositiveAndBelow (f, (int) fgDrawn)) return;
+    Drawn d = get();
+    d.closed = closedFigure (f);
+    // the figures made of straight lines by their corners; the round ones by many points along them
+    int n = d.closed ? 32 : 24; d.curved = true;
+    switch (f)
+    {
+        case fgLine: case fgLiege: case fgVertical: case fgExpand: n = 2; d.curved = false; break;
+        case fgCube: case fgPolytope: n = 8; d.curved = false; break;
+        case fgParaboloid: n = 7; d.curved = false; break;
+        case fgVault: case fgSoundcube: n = 48; d.curved = false; break;
+        default: break;
+    }
+    d.count = n;
+    for (int k = 0; k < n; ++k)
+        d.pt[k] = clampRoom (figurePoint (f, d.closed ? (float) k / (float) n : (float) k / (float) (n - 1), 1.0f, 0.0f, 0.0f, 0u));
+    picked = -1;
+    set (d);
+}
+
+//==============================================================================
+DrawSheet::DrawSheet (LeitnerProcessor& p, Drawing& d) : proc (p), drawing (d)
+{
+    setWantsKeyboardFocus (true);
+    for (auto* b : { &closedBtn, &curvedBtn, &atPointsBtn, &fromBtn, &clearBtn, &undoBtn }) addAndMakeVisible (b);
+    auto toggle = [this] (auto change) { return [this, change] { drawing.begin(); auto dd = drawing.get(); change (dd); drawing.set (dd); refreshButtons(); }; };
+    closedBtn.onClick = toggle ([] (leitner::Drawn& dd) { dd.closed = ! dd.closed; });
+    curvedBtn.onClick = toggle ([] (leitner::Drawn& dd) { dd.curved = ! dd.curved; });
+    atPointsBtn.onClick = toggle ([] (leitner::Drawn& dd) { dd.atPoints = ! dd.atPoints; });
+    clearBtn.onClick = [this]
+    {
+        drawing.begin();
+        leitner::Drawn dd; dd.count = 2; dd.closed = false; dd.curved = true;
+        dd.pt[0] = { -0.8f, 0.0f, 0.0f }; dd.pt[1] = { 0.8f, 0.0f, 0.0f };
+        drawing.picked = 1;
+        drawing.set (dd);
+    };
+    undoBtn.onClick = [this] { drawing.undo(); };
+    fromBtn.setButtonText ("start from a figure...");
+    fromBtn.onClick = [this]
+    {
+        PopupMenu m;
+        m.addSectionHeader ("start again from");
+        for (int f = 0; f < leitner::fgDrawn; ++f) m.addItem (f + 1, String::fromUTF8 (leitner::figureNames()[f]) + "  -  " + leitner::figureEnglish()[f]);
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (fromBtn), [this] (int r) { if (r > 0) { drawing.begin(); drawing.fromFigure (r - 1); } });
+    };
+    refreshButtons();
+}
+
+void DrawSheet::refreshButtons()
+{
+    const auto& d = drawing.get();
+    auto put = [] (TextButton& b, const String& t) { if (b.getButtonText() != t) b.setButtonText (t); };
+    put (closedBtn, d.closed ? "a closed loop" : "open: there and back");
+    put (curvedBtn, d.curved ? "curved through them" : "straight lines");
+    put (atPointsBtn, d.atPoints ? "speakers at my points" : "speakers by 'points'");
+    put (clearBtn, "start again");
+    put (undoBtn, "undo");
+    undoBtn.setEnabled (drawing.canUndo());
+}
+
+void DrawSheet::resized()
+{
+    const int w = (getWidth() - 16) / 3;
+    closedBtn.setBounds (0, 566, w, 20); curvedBtn.setBounds (w + 8, 566, w, 20); atPointsBtn.setBounds (2 * w + 16, 566, w, 20);
+    fromBtn.setBounds (0, 592, w, 20); clearBtn.setBounds (w + 8, 592, w, 20); undoBtn.setBounds (2 * w + 16, 592, w, 20);
+}
+
+// from above (the front at the top), from the right-hand side (the front to the right), from behind
+// (as the room is first seen: your left on the left)
+std::array<DrawSheet::Ortho, 3> DrawSheet::views() const
+{
+    const float W = (float) getWidth(), half = (W - 12.0f) * 0.5f;
+    return { Ortho { { 0.0f, 22.0f, W, 282.0f }, { 0, -1, 0 }, { 1, 0, 0 }, "plan" },
+             Ortho { { 0.0f, 338.0f, half, 212.0f }, { 1, 0, 0 }, { 0, 0, 1 }, "side" },
+             Ortho { { W - half, 338.0f, half, 212.0f }, { 0, -1, 0 }, { 0, 0, 1 }, "behind" } };
+}
+static float orthoScale (const Rectangle<float>& b) { return 0.5f * jmin (b.getWidth(), b.getHeight()) - 12.0f; }
+Point<float> DrawSheet::toScreen (const Ortho& o, leitner::Vec3 v)
+{
+    const auto c = o.box.getCentre(); const float s = orthoScale (o.box);
+    return { c.x + v.dot (o.right) * s, c.y - v.dot (o.up) * s };
+}
+leitner::Vec3 DrawSheet::fromScreen (const Ortho& o, Point<float> q, leitner::Vec3 keep)
+{
+    const auto c = o.box.getCentre(); const float s = orthoScale (o.box);
+    const float a = jlimit (-1.0f, 1.0f, (q.x - c.x) / s), b = jlimit (-1.0f, 1.0f, -(q.y - c.y) / s);
+    return keep - o.right * keep.dot (o.right) - o.up * keep.dot (o.up) + o.right * a + o.up * b;
+}
+int DrawSheet::viewAt (Point<float> q) const
+{
+    const auto v = views();
+    for (int i = 0; i < 3; ++i) if (v[(size_t) i].box.contains (q)) return i;
+    return -1;
+}
+int DrawSheet::pointAt (const Ortho& o, Point<float> q) const
+{
+    const auto& d = drawing.get();
+    int best = -1; float bestD = 8.0f;
+    for (int i = d.count - 1; i >= 0; --i)   // (the later drawn on top)
+        if (const float dd = toScreen (o, d.pt[i]).getDistanceFrom (q); dd < bestD) { bestD = dd; best = i; }
+    if (best < 0 && drawing.picked >= 0 && drawing.picked < d.count && toScreen (o, d.pt[drawing.picked]).getDistanceFrom (q) < 8.0f) best = drawing.picked;
+    return best;
+}
+
+void DrawSheet::paint (Graphics& g)
+{
+    using leitner::Vec3;
+    const auto& d = drawing.get();
+    const auto p = proc.readSpace();
+    const auto st = proc.space.stateNow();
+    const auto vs = views();
+    auto heading = [&] (const String& t, int y)
+    {
+        g.setColour (ink); g.setFont (typed (11.5f, true));
+        g.drawText (t, 0, y, getWidth(), 18, Justification::centredLeft);
+        g.drawLine (0.0f, (float) y + 18.0f, (float) getWidth(), (float) y + 18.0f, 1.2f);
+    };
+    heading ("GRUNDRISS  xx  YOUR OWN, SEEN FROM ABOVE", 0);
+    heading ("AUFRISS  xx  FROM THE SIDE", 316);
+    g.drawText ("FROM BEHIND", 0, 316, getWidth(), 18, Justification::centredRight);
+
+    // where line 1 is now, back in the drawing's own measure
+    const Vec3 now = leitner::roomToDrawn (p, st, { proc.space.view[0].x.load(), proc.space.view[0].y.load(), proc.space.view[0].z.load() });
+
+    for (int vi = 0; vi < 3; ++vi)
+    {
+        const auto& o = vs[(size_t) vi];
+        const auto c = o.box.getCentre(); const float s = orthoScale (o.box);
+        auto P = [&] (Vec3 v) { return toScreen (o, v); };
+        const Rectangle<float> room (c.x - s, c.y - s, 2.0f * s, 2.0f * s);
+        g.setColour (ink); g.drawRect (room, 1.0f);
+        // a faint grid, quarters of the room
+        g.setColour (faint.withAlpha (0.35f));
+        for (float k : { -0.5f, 0.0f, 0.5f })
+        {
+            g.drawLine (c.x + k * s, room.getY(), c.x + k * s, room.getBottom(), k == 0.0f ? 0.8f : 0.5f);
+            g.drawLine (room.getX(), c.y + k * s, room.getRight(), c.y + k * s, k == 0.0f ? 0.8f : 0.5f);
+        }
+        // the listener
+        g.setColour (ink.withAlpha (0.55f));
+        if (vi == 0)
+        {
+            g.fillEllipse (c.x - 0.24f * s, c.y - 0.06f * s, 0.48f * s, 0.15f * s);
+            g.fillEllipse (c.x - 0.07f * s, c.y - 0.09f * s, 0.14f * s, 0.14f * s);
+        }
+        else
+        {
+            const auto head = P ({ 0, 0, 0 }), feet = P ({ 0, 0, -1 });
+            const float h = feet.y - head.y, w = h * 0.2f;
+            g.fillEllipse (head.x - w * 0.36f, head.y - h * 0.09f, w * 0.72f, h * 0.17f);
+            g.fillRoundedRectangle (head.x - w * 0.5f, head.y + h * 0.11f, w, h * 0.42f, w * 0.3f);
+            g.fillRect (head.x - w * 0.3f, head.y + h * 0.5f, w * 0.6f, h * 0.5f);
+            if (vi == 1) g.drawLine (head.x + w * 0.5f, head.y, head.x + w * 0.95f, head.y, 1.4f);
+        }
+        g.setColour (ink); g.setFont (typed (9.5f));
+        if (vi == 0) g.drawText ("front  vorn", Rectangle<float> (c.x - 50.0f, room.getY() - 13.0f, 100.0f, 12.0f), Justification::centred);
+        if (vi == 1) { g.drawText ("front", Rectangle<float> (room.getRight() - 52.0f, room.getY() + 2.0f, 50.0f, 12.0f), Justification::centredRight);
+                       g.drawText ("from the right", Rectangle<float> (room.getX(), room.getBottom() + 1.0f, 120.0f, 12.0f), Justification::centredLeft); }
+        if (vi == 2) { g.drawText ("left", Rectangle<float> (room.getX() + 3.0f, room.getY() + 2.0f, 50.0f, 12.0f), Justification::centredLeft);
+                       g.drawText ("right", Rectangle<float> (room.getRight() - 53.0f, room.getY() + 2.0f, 50.0f, 12.0f), Justification::centredRight);
+                       g.drawText ("from behind, facing front", Rectangle<float> (room.getRight() - 160.0f, room.getBottom() + 1.0f, 160.0f, 12.0f), Justification::centredRight); }
+
+        Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (o.box.toNearestInt());
+        // guides through the picked point
+        if (isPositiveAndBelow (drawing.picked, d.count))
+        {
+            const auto q = P (d.pt[drawing.picked]);
+            g.setColour (faint.withAlpha (0.6f));
+            const float dash[] = { 3.0f, 3.0f };
+            g.drawDashedLine ({ room.getX(), q.y, room.getRight(), q.y }, dash, 2, 0.6f);
+            g.drawDashedLine ({ q.x, room.getY(), q.x, room.getBottom() }, dash, 2, 0.6f);
+        }
+        // the path
+        Path path;
+        for (int k = 0; k <= leitner::Drawn::kTable; k += 2)
+        {
+            const auto q = P (d.table[k]);
+            if (k == 0) path.startNewSubPath (q); else path.lineTo (q);
+        }
+        g.setColour (ink);
+        g.strokePath (path, PathStrokeType (2.2f, PathStrokeType::curved, PathStrokeType::rounded));
+        if (d.count >= 2)
+        {
+            const auto a = P (d.at (0.3f)), b = P (d.at (0.31f));
+            if (a.getDistanceFrom (b) > 0.3f) { Path head; head.addArrow ({ a, a + (b - a) * (10.0f / a.getDistanceFrom (b)) }, 0.0f, 9.0f, 10.0f); g.fillPath (head); }
+        }
+        // your points, the first marked; the picked one filled
+        g.setFont (typed (9.0f));
+        for (int i = 0; i < d.count; ++i)
+        {
+            const auto q = P (d.pt[i]);
+            const bool pk = i == drawing.picked;
+            g.setColour (paper); g.fillEllipse (q.x - 5.0f, q.y - 5.0f, 10.0f, 10.0f);
+            g.setColour (ink);
+            if (pk) g.fillEllipse (q.x - 5.0f, q.y - 5.0f, 10.0f, 10.0f); else g.drawEllipse (q.x - 4.5f, q.y - 4.5f, 9.0f, 9.0f, 1.2f);
+            if (i == 0) g.drawText ("1", Rectangle<float> (q.x + 5.0f, q.y - 13.0f, 14.0f, 11.0f), Justification::centredLeft);
+        }
+        // where line 1 is now
+        {
+            const auto q = P (now);
+            g.setColour (red); g.fillEllipse (q.x - 3.5f, q.y - 3.5f, 7.0f, 7.0f);
+        }
+        if (stroking && dragView == vi && stroke.size() > 1)
+        {
+            Path sp; sp.startNewSubPath (stroke[0]);
+            for (auto& q : stroke) sp.lineTo (q);
+            g.setColour (ink.withAlpha (0.45f)); g.strokePath (sp, PathStrokeType (1.4f));
+        }
+    }
+
+    // the caption: which point, and how to draw
+    g.setFont (typed (11.0f));
+    g.setColour (ink);
+    String what = String (d.count) + " points, " + (d.closed ? "a closed loop" : "there and back");
+    if (isPositiveAndBelow (drawing.picked, d.count))
+    {
+        const auto v = d.pt[drawing.picked];
+        auto pc = [] (float x) { return (x >= 0.0f ? "+" : "") + String (roundToInt (x * 100.0f)); };
+        what << "  xx  point " << (drawing.picked + 1) << ": front " << pc (v.x) << ", left " << pc (v.y) << ", up " << pc (v.z);
+    }
+    g.drawText (what, 0, 620, getWidth(), 15, Justification::centredLeft);
+    g.setColour (faint); g.setFont (typed (10.0f));
+    const char* help[] = { "click: a new point (on the line: between two)  -  drag one to move it",
+                           "double-click a point, or delete: take it away  -  cmd-Z: undo",
+                           "shift-drag on the paper, or in the room: draw a whole new path",
+                           "in the room: drag a point across your view of it; turn the room to reach depth" };
+    for (int i = 0; i < 4; ++i) g.drawText (help[i], 0, 638 + i * 13, getWidth(), 13, Justification::centredLeft);
+}
+
+void DrawSheet::mouseDown (const MouseEvent& e)
+{
+    grabKeyboardFocus();
+    const auto q = e.position;
+    const int vi = viewAt (q);
+    if (vi < 0) return;
+    const auto o = views()[(size_t) vi];
+    const auto& d = drawing.get();
+    if (const int i = pointAt (o, q); i >= 0)
+    {
+        drawing.picked = i;
+        if (e.mods.isPopupMenu()) { drawing.begin(); drawing.removePoint (i); return; }
+        drawing.begin();
+        dragView = vi; dragPoint = i;
+        repaint();
+        return;
+    }
+    if (e.mods.isShiftDown()) { stroking = true; dragView = vi; stroke = { q }; return; }
+    // a new point: between two if you clicked on the line, else after the picked one (or at the end)
+    int after = isPositiveAndBelow (drawing.picked, d.count) ? drawing.picked : d.count - 1;
+    leitner::Vec3 keep = d.count > 0 ? d.pt[jmax (0, after)] : leitner::Vec3 {};
+    float bestD = 8.0f;
+    const int segs = d.closed ? d.count : d.count - 1;
+    for (int i = 0; i < segs; ++i)
+    {
+        const auto A = d.pt[i], B = d.pt[(i + 1) % d.count];
+        const auto a = toScreen (o, A), b = toScreen (o, B);
+        const auto ab = b - a; const float L2 = ab.x * ab.x + ab.y * ab.y;
+        const float t = L2 > 0.0f ? jlimit (0.0f, 1.0f, ((q - a).x * ab.x + (q - a).y * ab.y) / L2) : 0.0f;
+        if (const float dd = q.getDistanceFrom (a + ab * t); dd < bestD) { bestD = dd; after = i; keep = A + (B - A) * t; }
+    }
+    drawing.begin();
+    const int at = drawing.insertPoint (after, fromScreen (o, q, keep));
+    if (at >= 0) { drawing.picked = at; dragView = vi; dragPoint = at; }
+    repaint();
+}
+void DrawSheet::mouseDrag (const MouseEvent& e)
+{
+    if (dragPoint >= 0 && dragView >= 0)
+        drawing.movePoint (dragPoint, fromScreen (views()[(size_t) dragView], e.position, drawing.get().pt[dragPoint]));
+    else if (stroking && (stroke.empty() || stroke.back().getDistanceFrom (e.position) > 2.5f)) { stroke.push_back (e.position); repaint(); }
+}
+void DrawSheet::mouseUp (const MouseEvent&)
+{
+    if (stroking && stroke.size() >= 3 && dragView >= 0)
+    {
+        const auto o = views()[(size_t) dragView];
+        std::vector<leitner::Vec3> pts;
+        for (auto q : stroke) pts.push_back (fromScreen (o, q, {}));   // (the third measure: through the middle; move points in the other views)
+        drawing.begin();
+        drawing.setStroke (pts, true);
+    }
+    stroking = false; stroke.clear(); dragView = dragPoint = -1;
+    repaint();
+}
+void DrawSheet::mouseDoubleClick (const MouseEvent& e)
+{
+    const int vi = viewAt (e.position);
+    if (vi < 0) return;
+    if (const int i = pointAt (views()[(size_t) vi], e.position); i >= 0) { drawing.begin(); drawing.removePoint (i); }
+}
+bool DrawSheet::keyPressed (const KeyPress& k)
+{
+    if ((k.getKeyCode() == KeyPress::deleteKey || k.getKeyCode() == KeyPress::backspaceKey) && drawing.picked >= 0) { drawing.begin(); drawing.removePoint (drawing.picked); return true; }
+    if (k == KeyPress ('z', ModifierKeys::commandModifier, 0)) { drawing.undo(); return true; }
+    return false;
+}
+
 } // namespace lt
 
 //==============================================================================
@@ -549,8 +1027,10 @@ LeitnerEditor::LeitnerEditor (LeitnerProcessor& p) : AudioProcessorEditor (&p), 
     };
     // the side sheets: after Leitner on the left, after Xenakis on the right
     plan.setBounds (26, 74, 436, 676);
+    drawSheet.setBounds (plan.getBounds());
     chance.setBounds (designW - 26 - 436, 74, 436, 676);
-    content.addAndMakeVisible (plan); content.addAndMakeVisible (chance);
+    content.addAndMakeVisible (plan); content.addAndMakeVisible (chance); content.addChildComponent (drawSheet);
+    drawing.changed = [this] { drawSheet.refreshButtons(); drawSheet.repaint(); room.repaint(); };
 
     // the middle sheet, under the room: the space, in two facing columns
     {
@@ -565,8 +1045,18 @@ LeitnerEditor::LeitnerEditor (LeitnerProcessor& p) : AudioProcessorEditor (&p), 
         b.rule (proc.swell, "swell"); b.rule (proc.lift, "lift"); b.rule (proc.room, "room"); b.rule (proc.roomDecay, "decay");
         b.choice (proc.order, "order");
         auto* hold = new lt::Check (*proc.hold, "hold the lines still", false);
-        hold->setBounds (670, 680, 160, kRow);
+        hold->setBounds (556, 681, 170, kRow);
         parts.add (hold); content.addAndMakeVisible (hold);
+        // your own figure: to the drawing and back
+        drawBtn.setBounds (774, 680, 170, kRow + 2);
+        drawBtn.onClick = [this]
+        {
+            const bool mine = proc.figure->getIndex() == leitner::fgDrawn;
+            proc.figure->beginChangeGesture();
+            proc.figure->setValueNotifyingHost (proc.figure->convertTo0to1 ((float) (mine ? lastFigure : (int) leitner::fgDrawn)));
+            proc.figure->endChangeGesture();
+        };
+        content.addAndMakeVisible (drawBtn);
 
         presetBtn.setBounds (506, 738, 238, kRow + 2);
         presetBtn.onClick = [this] { programMenu(); };
@@ -630,7 +1120,8 @@ void LeitnerEditor::paintSheets (Graphics& g)
     g.drawText ("line 1 black, the left channel  xxxxx  line 2 red, the right channel, its mirror image", mid.getX(), 443, mid.getWidth(), 14, Justification::centred);
     g.drawLine ((float) mid.getX(), 464.0f, (float) mid.getRight(), 464.0f, 0.8f);
     g.setColour (lt::faint);
-    g.drawText ("drag the room to turn it  xxxxx  double-click: from the front again", mid.getX(), 407, mid.getWidth(), 14, Justification::centred);
+    g.drawText (fig == leitner::fgDrawn ? "drag a point to move it  xx  shift-drag: draw  xx  drag the room to turn it"
+                                        : "drag the room to turn it  xxxxx  double-click: from the front again", mid.getX(), 407, mid.getWidth(), 14, Justification::centred);
 
     g.setColour (lt::faint);
     g.setFont (typed (10.0f));
@@ -639,13 +1130,13 @@ void LeitnerEditor::paintSheets (Graphics& g)
     // the side sheets
     g.setColour (lt::ink);
     g.setFont (typed (12.0f, true));
-    g.drawText ("TON-RAUM  xxxxx  SOUND SPACE", 26, 26, 436, 16, Justification::centredLeft);
+    g.drawText (fig == leitner::fgDrawn ? "ZEICHNUNG  xxxxx  YOUR OWN SPACE" : "TON-RAUM  xxxxx  SOUND SPACE", 26, 26, 436, 16, Justification::centredLeft);
     g.drawText ("STOCHASTIC SPACE  xxxxx  XENAKIS", designW - 26 - 436, 26, 436, 16, Justification::centredRight);
     g.setFont (typed (10.5f));
     g.setColour (lt::faint);
-    g.drawText ("after Bernhard Leitner, Ton-Raum, 1969 to now", 26, 46, 436, 14, Justification::centredLeft);
+    g.drawText (fig == leitner::fgDrawn ? "a line of your own through the room, as Leitner drew his" : "after Bernhard Leitner, Ton-Raum, 1969 to now", 26, 46, 436, 14, Justification::centredLeft);
     g.drawText ("after Iannis Xenakis, Polytopes, 1967 to 1978", designW - 26 - 436, 46, 436, 14, Justification::centredRight);
-    g.drawText ("line 1 black, the left channel; line 2 red, the right", 26, 754, 436, 14, Justification::centredLeft);
+    if (fig != leitner::fgDrawn) g.drawText ("line 1 black, the left channel; line 2 red, the right", 26, 754, 436, 14, Justification::centredLeft);
     g.drawText ("set on the middle sheet: chance, walk, scatter, sieve", designW - 26 - 436, 754, 436, 14, Justification::centredRight);
 }
 
@@ -681,8 +1172,14 @@ void LeitnerEditor::programMenu()
 
 void LeitnerEditor::timerCallback()
 {
-    room.repaint(); plan.repaint(); chance.poll(); chance.repaint();
     const int fig = proc.figure->getIndex(), out = proc.orderNow.load() * 100 + proc.channelsNow.load();
+    const bool mine = fig == leitner::fgDrawn;
+    if (! mine) lastFigure = fig;
+    if (plan.isVisible() == mine) { plan.setVisible (! mine); drawSheet.setVisible (mine); }
+    const String drawText = mine ? "back to " + String::fromUTF8 (leitner::figureNames()[lastFigure]) : String ("draw your own figure");
+    if (drawBtn.getButtonText() != drawText) drawBtn.setButtonText (drawText);
+    room.repaint(); chance.poll(); chance.repaint();
+    if (mine) { drawSheet.repaint(); drawSheet.refreshButtons(); } else plan.repaint();
     if (fig != seenFigure || out != seenOut) { seenFigure = fig; seenOut = out; content.repaint(); }
     if (const int pr = proc.getCurrentProgram(); pr != seenProgram) { if (seenProgram >= 0) userShown.clear(); seenProgram = pr; }
     const String name = "program: " + (userShown.isNotEmpty() ? userShown : proc.getProgramName (proc.getCurrentProgram()));

@@ -21,3 +21,7 @@ Every request typed while Leitner was designed and built with Claude Code, in or
 > then update, update manual and push
 
 > also make sure it has its own repo, and add the homebrew to the homebrew list repo
+
+## 2026-11-12 (0.4.0)
+
+> for leigtner, add an editor to draw my own trajectories in 3d space.

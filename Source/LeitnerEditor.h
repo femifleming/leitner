@@ -99,21 +99,88 @@ private:
     uint32_t seenPass = 0;
 };
 
-// the room, in perspective, with the two lines of sound in it. Drag to turn it.
+// Your own figure, while you draw it: the drawing, which point is picked, and undo. The sheet and the
+// room both edit through this, so a point picked in one is picked in the other.
+class Drawing
+{
+public:
+    explicit Drawing (LeitnerProcessor& p) : proc (p) {}
+    const leitner::Drawn& get() const { return proc.drawing(); }
+    void begin();                                // before a change: remember it for undo
+    void set (const leitner::Drawn&);            // the change (as often as you like during a drag)
+    void undo();
+    bool canUndo() const { return ! undos.empty(); }
+    void movePoint (int i, leitner::Vec3);
+    int insertPoint (int after, leitner::Vec3);  // returns its index
+    void removePoint (int i);
+    // a freehand stroke (points in the room's -1..1), thinned to at most 64 points; ends that meet close the loop
+    void setStroke (const std::vector<leitner::Vec3>&, bool closeIfEndsMeet);
+    void fromFigure (int figure);                // start from one of the figures
+    int picked = -1;
+    std::function<void()> changed;
+private:
+    LeitnerProcessor& proc;
+    std::vector<leitner::Drawn> undos;
+};
+
+// The sheet you draw on, in place of Leitner's while the figure is your own: the path from above,
+// from the side and from behind, every point draggable in each; click to add a point, shift-drag to
+// draw a new path freehand, double-click a point to take it away.
+class DrawSheet : public juce::Component
+{
+public:
+    DrawSheet (LeitnerProcessor&, Drawing&);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+    bool keyPressed (const juce::KeyPress&) override;
+    void refreshButtons();
+private:
+    struct Ortho { juce::Rectangle<float> box; leitner::Vec3 right, up; const char* name; };
+    std::array<Ortho, 3> views() const;
+    static juce::Point<float> toScreen (const Ortho&, leitner::Vec3);
+    static leitner::Vec3 fromScreen (const Ortho&, juce::Point<float>, leitner::Vec3 keep);
+    int viewAt (juce::Point<float>) const;
+    int pointAt (const Ortho&, juce::Point<float>) const;
+    LeitnerProcessor& proc;
+    Drawing& drawing;
+    juce::TextButton closedBtn, curvedBtn, atPointsBtn, fromBtn, clearBtn, undoBtn;
+    int dragView = -1, dragPoint = -1;
+    bool stroking = false;
+    std::vector<juce::Point<float>> stroke;
+};
+
+// the room, in perspective, with the two lines of sound in it. Drag to turn it. While the figure is
+// your own, your points are drawn in it too: drag one to move it (across your view of the room), or
+// shift-drag on the room to draw a new path on the plane through the middle, facing you.
 class Room : public juce::Component
 {
 public:
-    explicit Room (LeitnerProcessor& p) : proc (p) { setMouseCursor (juce::MouseCursor::DraggingHandCursor); }
+    Room (LeitnerProcessor& p, Drawing& d) : proc (p), drawing (d) { setMouseCursor (juce::MouseCursor::DraggingHandCursor); }
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
 private:
     struct View { leitner::Vec3 f, r, u; };
     View view() const;
     juce::Point<float> project (const View&, leitner::Vec3, float* scale = nullptr) const;
+    leitner::Vec3 onMiddlePlane (const View&, juce::Point<float>) const;
+    int handleAt (juce::Point<float>) const;
+    bool editing() const;
     LeitnerProcessor& proc;
+    Drawing& drawing;
     float yawDown = 0.0f, pitchDown = 0.0f;
+    int dragPoint = -1;
+    leitner::Vec3 pointDown {};
+    bool stroking = false;
+    std::vector<leitner::Vec3> stroke;
+    std::vector<juce::Point<float>> strokeScreen;
 };
 }
 
@@ -146,11 +213,14 @@ private:
     LeitnerProcessor& proc;
     Look look;
     Content content { *this };
-    lt::Room room { proc };
+    lt::Drawing drawing { proc };
+    lt::Room room { proc, drawing };
     lt::Plan plan { proc };
+    lt::DrawSheet drawSheet { proc, drawing };
     lt::Chance chance { proc };
     juce::OwnedArray<juce::Component> parts;
-    juce::TextButton presetBtn, randomBtn;
+    juce::TextButton presetBtn, randomBtn, drawBtn;
+    int lastFigure = 0;                          // to go back to from your own
     int seenFigure = -1, seenOut = -1;
     int seenProgram = -1;
     juce::String userShown;                      // your preset's name, while it is the one loaded

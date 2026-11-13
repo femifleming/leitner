@@ -44,6 +44,10 @@ public:
     static juce::String presetExtension() { return ".leitner"; }
     void randomize();   // a random space (message thread)
 
+    // your own figure: the path you draw (message thread). setDrawing measures it and hands it to the audio.
+    const leitner::Drawn& drawing() const { return drawn; }
+    void setDrawing (const leitner::Drawn&);
+
     juce::AudioParameterChoice* order = nullptr;
     juce::AudioParameterChoice* figure = nullptr;
     juce::AudioParameterChoice* sieve = nullptr;
@@ -63,6 +67,11 @@ public:
 
 private:
     static BusesProperties buses();
+    leitner::Drawn drawn = leitner::Drawn::saddle();     // the message thread's
+    leitner::Drawn drawnShared = drawn, drawnAudio = drawn;   // handed over under the lock; the audio's own
+    juce::SpinLock drawnLock;
+    std::atomic<int> drawnVersion { 0 };
+    int drawnSeen = 0;
     juce::AudioBuffer<float> stereo;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LeitnerProcessor)

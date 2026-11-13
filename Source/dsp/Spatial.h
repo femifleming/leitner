@@ -29,6 +29,10 @@
 //
 // Each line is encoded to Ambisonics (ACN, SN3D, 3rd to 7th order) at the points it's sounding
 // from, inside the sphere as well as on it, so a line can pass straight through you.
+//
+// And a figure of your own: a path you draw through the room, point by point in three dimensions
+// (see Drawn below). Everything else (the raster, the sieve, size, height, turn, apart, the mirror
+// image, chance) works on it as on the others.
 namespace leitner
 {
 using fp::ambi::Vec3;
@@ -56,20 +60,21 @@ enum Figure
     fgParaboloid,    // Xenakis: straight lines zigzagging between two skew edges, sweeping a hyperbolic paraboloid
     fgTerretektorh,  // Xenakis: a flat spiral from the wall in towards you, faster and faster, and out again
     fgPolytope,      // Xenakis: eight points thrown over the sphere, joined in turn; new points every pass
+    fgDrawn,         // your own: the path you draw (Drawn below)
     numFigures
 };
 
 inline const char* const* figureNames()
 {
     static const char* const n[numFigures] = { "Ton-Linie", "Schwingen", "Ton-Liege", "Ton-Tor", "Vertikal", "Kreis", "Soundcube", "Spirale",
-                                               "Ton-W\xc3\xbcrfel", "Erweitern-Verengen", "W\xc3\xb6lbung", "Paraboloid", "Terretektorh", "Polytope" };
+                                               "Ton-W\xc3\xbcrfel", "Erweitern-Verengen", "W\xc3\xb6lbung", "Paraboloid", "Terretektorh", "Polytope", "Eigene Zeichnung" };
     return n;
 }
 inline const char* const* figureEnglish()
 {
     static const char* const n[numFigures] = { "line of sound", "swinging space", "sound chair", "sound gate", "vertical space", "circling", "four circles, four heights",
                                                "spiral space", "sound cube", "widening, narrowing", "vault", "ruled surface (Xenakis)", "accelerating spiral (Xenakis)",
-                                               "points by chance (Xenakis)" };
+                                               "points by chance (Xenakis)", "your own, drawn in three dimensions" };
     return n;
 }
 
@@ -94,6 +99,96 @@ inline bool inSieve (int sieve, int k) noexcept
 
 inline float hash01 (uint32_t a, uint32_t b, uint32_t c) noexcept;
 
+// A path you draw: up to 64 points in the room (the room is -1..1 on every axis, you stand at the
+// middle: x to the front, y to the left, z up), joined straight or in a curve through them, as a
+// closed loop that runs round or an open line that goes there and comes back. prepare() measures it
+// so the line moves along it at an even speed; it must be called after any change (the processor
+// does, in setDrawing). The loudspeakers of the raster are spread evenly along it, or stand at your
+// points if 'atPoints'.
+constexpr int kMaxDrawn = 64;
+struct Drawn
+{
+    static constexpr int kTable = 512;
+    int count = 0;
+    bool closed = true, curved = true, atPoints = false;
+    Vec3 pt[kMaxDrawn] {};
+    // (made by prepare)
+    Vec3 table[kTable + 1] {};      // the path at kTable + 1 evenly spaced places along it
+    float vertexW[kMaxDrawn] {};    // where along it (0..1) each of your points is
+
+    // the default: a ring round you that rises and dips twice, a saddle
+    static Drawn saddle()
+    {
+        Drawn d; d.count = 8;
+        for (int k = 0; k < 8; ++k)
+        {
+            const float a = 2.0f * 3.14159265f * (float) k / 8.0f;
+            d.pt[k] = { 0.8f * std::cos (a), 0.8f * std::sin (a), 0.5f * std::cos (2.0f * a) };
+        }
+        d.prepare();
+        return d;
+    }
+
+    // point i of the curve's segment from i to i + 1, f = 0..1 (Catmull-Rom through the points when curved)
+    Vec3 segment (int i, float f) const noexcept
+    {
+        auto P = [&] (int k)
+        {
+            if (closed) return pt[((k % count) + count) % count];
+            if (k < 0) return pt[0] * 2.0f - pt[1];                               // (beyond the ends: straight on)
+            if (k >= count) return pt[count - 1] * 2.0f - pt[count - 2];
+            return pt[k];
+        };
+        const Vec3 p1 = P (i), p2 = P (i + 1);
+        if (! curved) return p1 + (p2 - p1) * f;
+        const Vec3 p0 = P (i - 1), p3 = P (i + 2);
+        const float f2 = f * f, f3 = f2 * f;
+        return (p1 * 2.0f + (p2 - p0) * f + (p0 * 2.0f - p1 * 5.0f + p2 * 4.0f - p3) * f2 + (p1 * 3.0f - p0 - p2 * 3.0f + p3) * f3) * 0.5f;
+    }
+
+    void prepare() noexcept
+    {
+        count = std::clamp (count, 0, kMaxDrawn);
+        if (count < 2)
+        {
+            const Vec3 v = count == 1 ? pt[0] : Vec3 {};
+            for (auto& t : table) t = v;
+            for (auto& w : vertexW) w = 0.0f;
+            return;
+        }
+        // the curve, finely, and how far along it each fine step is
+        constexpr int Sub = 16;
+        const int segs = closed ? count : count - 1;
+        static thread_local std::vector<Vec3> fine; static thread_local std::vector<float> len;
+        fine.resize ((size_t) (segs * Sub + 1)); len.resize (fine.size());
+        for (int i = 0; i < segs; ++i)
+            for (int k = 0; k < Sub; ++k) fine[(size_t) (i * Sub + k)] = segment (i, (float) k / (float) Sub);
+        fine.back() = closed ? pt[0] : pt[count - 1];
+        len[0] = 0.0f;
+        for (size_t i = 1; i < fine.size(); ++i) len[i] = len[i - 1] + (fine[i] - fine[i - 1]).length();
+        const float total = len.back();
+        if (total < 1.0e-6f) { for (auto& t : table) t = pt[0]; for (auto& w : vertexW) w = 0.0f; return; }
+        for (int i = 0; i < count; ++i) vertexW[i] = len[(size_t) (std::min (i, segs) * Sub)] / total;
+        size_t j = 0;
+        for (int k = 0; k <= kTable; ++k)
+        {
+            const float s = total * (float) k / (float) kTable;
+            while (j + 2 < fine.size() && len[j + 1] < s) ++j;
+            const float d = len[j + 1] - len[j], f = d > 1.0e-9f ? std::clamp ((s - len[j]) / d, 0.0f, 1.0f) : 0.0f;
+            table[k] = fine[j] + (fine[j + 1] - fine[j]) * f;
+        }
+    }
+
+    // where on it, w = 0..1 along it
+    Vec3 at (float w) const noexcept
+    {
+        const float x = std::clamp (w, 0.0f, 1.0f) * (float) kTable;
+        const int i = std::min ((int) x, kTable - 1);
+        const float f = x - (float) i;
+        return table[i] + (table[i + 1] - table[i]) * f;
+    }
+};
+
 struct Params
 {
     int order = 3, figure = fgLine;
@@ -110,6 +205,7 @@ struct Params
     float chance = 0.0f, walk = 0.0f, scatter = 0.0f; int sieve = 0;   // Xenakis (see the top of this file)
     float room = 0.15f, roomDecay = 3.0f, level = 1.0f;
     bool hold = false;           // stop the lines where they are
+    const Drawn* drawn = nullptr; // your path, for fgDrawn
 };
 
 // what chance has decided so far: which pass this is, and where the random walk has taken the figure
@@ -130,9 +226,10 @@ inline float gauss (uint32_t a, uint32_t b, uint32_t c) noexcept
 
 // is the figure a closed loop (it runs round) or a line (it goes there and comes back)?
 inline bool closedFigure (int f) noexcept { return f == fgCircle || f == fgSoundcube || f == fgCube || f == fgVault || f == fgPolytope; }
+inline bool closedFigure (const Params& p) noexcept { return p.figure == fgDrawn ? (p.drawn != nullptr && p.drawn->closed) : closedFigure (p.figure); }
 
 // where on the figure, w = 0..1 along it, in the figure's own frame; 'az' is line 1's angle (radians, to the left of ahead)
-inline Vec3 figurePoint (int figure, float w, float size, float height, float az, uint32_t pass = 0) noexcept
+inline Vec3 figurePoint (int figure, float w, float size, float height, float az, uint32_t pass = 0, const Drawn* drawn = nullptr) noexcept
 {
     const float cz = std::cos (az), sz = std::sin (az);
     auto along = [&] (float d, float side, float z) { return Vec3 { d * cz - side * sz, d * sz + side * cz, z }; };   // d: along the direction, side: to its left
@@ -192,15 +289,32 @@ inline Vec3 figurePoint (int figure, float w, float size, float height, float az
             const Vec3 a = pt (pass, i), b = i + 1 < N ? pt (pass, i + 1) : pt (pass + 1u, 0);
             return along (a.x + f * (b.x - a.x), a.y + f * (b.y - a.y), height * 0.5f + a.z + f * (b.z - a.z));
         }
+        case fgDrawn:    { const Vec3 q = drawn != nullptr ? drawn->at (w) : Vec3 {};     return along (size * q.x, size * q.y, height + size * q.z); }
         default:         return along ((2.0f * w - 1.0f) * size, 0.0f, height);
     }
+}
+
+// one of your drawn points, as line 1 places it in the room (size, height, apart, turn and the walk
+// applied; not pulled in to the sphere), and back: where to put a point so that line 1 has it at v
+inline Vec3 drawnToRoom (const Params& p, const State& st, Vec3 q) noexcept
+{
+    const float az = p.apart * kPi / 180.0f, t = (p.turn + st.dTurn) * kPi / 180.0f;
+    const Vec3 a { p.size * q.x, p.size * q.y, p.height + st.dHeight + p.size * q.z };
+    const Vec3 b { a.x * std::cos (az) - a.y * std::sin (az), a.x * std::sin (az) + a.y * std::cos (az), a.z };
+    return { b.x * std::cos (t) - b.y * std::sin (t), b.x * std::sin (t) + b.y * std::cos (t), b.z };
+}
+inline Vec3 roomToDrawn (const Params& p, const State& st, Vec3 v) noexcept
+{
+    const float ang = -((p.turn + st.dTurn) + p.apart) * kPi / 180.0f, k = 1.0f / std::max (0.05f, p.size);
+    const Vec3 a { v.x * std::cos (ang) - v.y * std::sin (ang), v.x * std::sin (ang) + v.y * std::cos (ang), v.z - p.height - st.dHeight };
+    return { std::clamp (a.x * k, -1.0f, 1.0f), std::clamp (a.y * k, -1.0f, 1.0f), std::clamp (a.z * k, -1.0f, 1.0f) };
 }
 
 // line 0 or 1 at w. Line 2 is line 1's mirror image (left for right), and 'turn' swings the pair round
 // together. 'point' >= 0: this is loudspeaker number 'point' of the raster, thrown off the line by 'scatter'.
 inline Vec3 linePoint (int line, const Params& p, const State& st, float w, int point = -1) noexcept
 {
-    Vec3 v = figurePoint (p.figure, w, p.size, p.height + st.dHeight, p.apart * kPi / 180.0f, st.pass);
+    Vec3 v = figurePoint (p.figure, w, p.size, p.height + st.dHeight, p.apart * kPi / 180.0f, st.pass, p.drawn);
     if (point >= 0 && p.scatter > 0.0f)
     {
         const float k = 0.3f * p.scatter;
@@ -213,12 +327,27 @@ inline Vec3 linePoint (int line, const Params& p, const State& st, float w, int 
     return l > 1.0f ? v * (1.0f / l) : v;
 }
 
+// is the line continuous (no raster)? Not when your drawn points are the loudspeakers.
+inline bool continuous (const Params& p) noexcept
+{
+    return p.points >= kMaxPoints && ! (p.figure == fgDrawn && p.drawn != nullptr && p.drawn->atPoints && p.drawn->count >= 2);
+}
+constexpr int kMaxRaster = kMaxDrawn;   // the most loudspeakers a raster can have (arrays for rasterPoints are this long)
+
 // the raster: the loudspeakers the sieve lets through, as places along the figure (w). Returns how many.
 inline int rasterPoints (const Params& p, float* w, int* index) noexcept
 {
-    const int K = std::clamp (p.points, 2, kMaxPoints - 1);
-    const bool closed = closedFigure (p.figure);
+    const bool closed = closedFigure (p);
     int n = 0;
+    if (p.figure == fgDrawn && p.drawn != nullptr && p.drawn->atPoints && p.drawn->count >= 2)
+    {
+        // your points are the loudspeakers (the sieve still picks among them)
+        const auto& d = *p.drawn;
+        for (int k = 0; k < d.count; ++k) if (inSieve (p.sieve, k)) { w[n] = d.vertexW[k]; index[n] = k; ++n; }
+        if (n < 2) { n = 0; for (int k = 0; k < d.count; ++k) { w[n] = d.vertexW[k]; index[n] = k; ++n; } }
+        return n;
+    }
+    const int K = std::clamp (p.points, 2, kMaxPoints - 1);
     for (int k = 0; k < K; ++k)
         if (inSieve (p.sieve, k)) { w[n] = closed ? (float) k / (float) K : (float) k / (float) (K - 1); index[n] = k; ++n; }
     if (n < 2) { n = 0; for (int k = 0; k < K; ++k) { w[n] = closed ? (float) k / (float) K : (float) k / (float) (K - 1); index[n] = k; ++n; } }
@@ -358,7 +487,7 @@ private:
     // where line 'li' is now: the gains of all its channels, and its level along the path
     void place (int li, const Params& p, int order, Coefs& target, float& lvl) noexcept
     {
-        const bool closed = closedFigure (p.figure);
+        const bool closed = closedFigure (p);
         double u = phase + (li == 1 ? 0.5 * (double) p.counter : 0.0);
         u -= std::floor (u);
         const float rest = std::clamp (p.rest, 0.0f, 0.9f);
@@ -383,11 +512,11 @@ private:
 
         Vec3 a, b; float ga = 1.0f, gb = 0.0f;
         const Vec3 here = linePoint (li, p, st, w);
-        if (p.points >= kMaxPoints) { a = b = here; }
+        if (continuous (p)) { a = b = here; }
         else
         {
             // the two loudspeakers of the raster it is between, and how far it has got from one to the other
-            float ws[kMaxPoints]; int idx[kMaxPoints];
+            float ws[kMaxRaster]; int idx[kMaxRaster];
             const int n = rasterPoints (p, ws, idx);
             int i = 0;
             if (closed) { while (i + 1 < n && ws[i + 1] <= w) ++i; }
