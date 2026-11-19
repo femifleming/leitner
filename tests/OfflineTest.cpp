@@ -462,10 +462,17 @@ int main (int argc, char** argv)
         check (own != nullptr, "the button to your own figure is there");
         if (own != nullptr)
         {
+            // (the window follows on its timer: on a slow machine give it up to three seconds, not a fixed moment)
+            auto settle = [] (std::function<bool()> done)
+            {
+                for (int t = 0; t < 150 && ! done(); ++t) MessageManager::getInstance()->runDispatchLoopUntil (20);
+            };
+            MessageManager::getInstance()->runDispatchLoopUntil (80);    // (the program chosen above lands first)
             setP (p.figure, (float) leitner::fgGate);
             MessageManager::getInstance()->runDispatchLoopUntil (80);
+            settle ([&] { return p.figure->getIndex() == leitner::fgGate && own->text == "draw your own figure" && plan->isVisible(); });
             click (*own, { 10.0f, 10.0f });
-            MessageManager::getInstance()->runDispatchLoopUntil (80);
+            settle ([&] { return own->text == "back to ton-tor" && sheet->isVisible() && ! plan->isVisible(); });
             check (p.figure->getIndex() == leitner::fgDrawn && sheet->isVisible() && ! plan->isVisible() && own->text == "back to ton-tor", "it opens the drawing sheet, and reads: " + own->text);
             setP (p.apart, 0.0f); setP (p.size, 1.0f);
             const int before = p.drawing().count;
@@ -507,7 +514,7 @@ int main (int argc, char** argv)
             float deepest = 0.0f; for (int i = 0; i < p.drawing().count; ++i) deepest = std::max (deepest, std::abs (p.drawing().pt[i].x));
             check (p.drawing().count >= 6 && deepest < 0.02f, String::formatted ("shift-drag in the room draws a new path of %d points on the middle plane", p.drawing().count));
             click (*own, { 10.0f, 10.0f });
-            MessageManager::getInstance()->runDispatchLoopUntil (80);
+            settle ([&] { return plan->isVisible(); });
             check (p.figure->getIndex() == leitner::fgGate && plan->isVisible(), "and back to the figure it came from");
         }
     }
