@@ -1,5 +1,6 @@
 // Offline checks for Leitner (not shipped): the Ambisonic encoding (direction, mirror image, the
-// raster's steps, every order), the state, CPU, and a picture of the window.
+// raster's steps, every order), the state, what a host sees, CPU, the window's controls worked with
+// the mouse, and pictures of the window, whole and in parts (the manual is made of them).
 #include "../Source/LeitnerEditor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <chrono>
@@ -13,6 +14,27 @@ static int failures = 0;
 static void check (bool ok, const String& what) { std::printf ("%s  %s\n", ok ? "ok  " : "FAIL", what.toRawUTF8()); if (! ok) ++failures; }
 
 static void setP (RangedAudioParameter* p, float real) { p->setValueNotifyingHost (p->convertTo0to1 (real)); }
+
+// the window's parts, and the mouse on them (no screen needed)
+template <class T> static T* find (Component& root)
+{
+    for (auto* c : root.getChildren()) { if (auto* t = dynamic_cast<T*> (c)) return t; if (auto* t = find<T> (*c)) return t; }
+    return nullptr;
+}
+template <class T> static void all (Component& root, std::vector<T*>& out)
+{
+    for (auto* c : root.getChildren()) { if (auto* t = dynamic_cast<T*> (c)) out.push_back (t); all (*c, out); }
+}
+static MouseEvent ev (Component& c, Point<float> at, Point<float> down, ModifierKeys mods = ModifierKeys::leftButtonModifier, int clicks = 1, bool dragged = false)
+{
+    return MouseEvent (Desktop::getInstance().getMainMouseSource(), at, mods, MouseInputSource::defaultPressure, MouseInputSource::defaultOrientation, MouseInputSource::defaultRotation,
+                       MouseInputSource::defaultTiltX, MouseInputSource::defaultTiltY, &c, &c, Time::getCurrentTime(), down, Time::getCurrentTime(), clicks, dragged);
+}
+static void click (Component& c, Point<float> at) { c.mouseDown (ev (c, at, at)); c.mouseUp (ev (c, at, at)); }
+static void drag (Component& c, Point<float> from, Point<float> to)
+{
+    c.mouseDown (ev (c, from, from)); c.mouseDrag (ev (c, to, from, ModifierKeys::leftButtonModifier, 1, true)); c.mouseUp (ev (c, to, from, ModifierKeys::leftButtonModifier, 1, true));
+}
 
 // no room: the lines carry the input and nothing else
 static void dry (LeitnerProcessor& p) { setP (p.room, 0.0f); }
@@ -54,9 +76,50 @@ static leitner::Vec3 directionOf (const AudioBuffer<float>& a, int from, int len
     return { (float) (wx / ww), (float) (wy / ww), (float) (wz / ww) };
 }
 
+// LeitnerTest --render in.wav out.wav channels [index=value ...]: the processor run on a file as a host runs it
+// (parameters by their number, values 0..1), written as 32-bit float. What a host renders is compared with this.
+static int renderFile (const StringArray& args)
+{
+    AudioFormatManager fm; fm.registerBasicFormats();
+    std::unique_ptr<AudioFormatReader> in (fm.createReaderFor (File (args[0])));
+    const int channels = args[2].getIntValue();
+    if (in == nullptr || channels < 1 || channels > 64) { std::printf ("usage: LeitnerTest --render in.wav out.wav channels [index=value ...]\n"); return 2; }
+    LeitnerProcessor p;
+    for (int i = 3; i < args.size(); ++i)
+    {
+        const int index = args[i].upToFirstOccurrenceOf ("=", false, false).getIntValue();
+        if (isPositiveAndBelow (index, p.getParameters().size())) p.getParameters()[index]->setValueNotifyingHost (args[i].fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+    }
+    constexpr int block = 512;
+    p.setPlayConfigDetails (2, channels, in->sampleRate, block);
+    p.prepareToPlay (in->sampleRate, block);
+    const int total = (int) in->lengthInSamples;
+    AudioBuffer<float> src (2, total), all (channels, total), buf (jmax (2, channels), block);
+    in->read (&src, 0, total, 0, true, true);
+    MidiBuffer midi;
+    for (int pos = 0; pos < total; pos += block)
+    {
+        const int n = jmin (block, total - pos);
+        AudioBuffer<float> view (buf.getArrayOfWritePointers(), jmax (2, channels), n);
+        view.clear();
+        for (int c = 0; c < 2; ++c) view.copyFrom (c, 0, src, c, pos, n);
+        AudioBuffer<float> io (view.getArrayOfWritePointers(), channels == 1 ? 2 : channels, n);   // (a host hands it as many channels as the wider side)
+        p.processBlock (io, midi);
+        for (int c = 0; c < channels; ++c) all.copyFrom (c, pos, io, c, 0, n);
+    }
+    File (args[1]).deleteFile();
+    std::unique_ptr<OutputStream> os = std::make_unique<FileOutputStream> (File (args[1]));
+    auto w = WavAudioFormat().createWriterFor (os, AudioFormatWriterOptions().withSampleRate (in->sampleRate).withNumChannels (channels).withBitsPerSample (32));
+    if (w == nullptr) return 2;
+    w->writeFromAudioSampleBuffer (all, 0, total);
+    std::printf ("%d channels, %d samples, order %d out\n", channels, total, p.orderNow.load());
+    return 0;
+}
+
 int main (int argc, char** argv)
 {
     ScopedJuceInitialiser_GUI gui;
+    if (argc > 4 && String (argv[1]) == "--render") return renderFile (StringArray (argv + 2, argc - 2));
     const File outDir (argc > 1 ? String (argv[1]) : File::getCurrentWorkingDirectory().getFullPathName());
     outDir.createDirectory();
 
@@ -305,16 +368,166 @@ int main (int argc, char** argv)
         const auto a = run (s, 0.5, true, true, 2);
         check (a.getMagnitude (0, 0, a.getNumSamples()) > 0.05f && s.orderNow.load() == 0, "on a stereo track a left-right fold comes out");
     }
-    {   // the window: from the front, turned, and one of Xenakis's figures; and how nearly its two halves mirror
-        struct Shot { int figure; float yaw, pitch, scatter; const char* name; };
-        const Shot shots[] = { { leitner::fgGate, 0.0f, 0.0f, 0.0f, "front" }, { leitner::fgSoundcube, 38.0f, 24.0f, 0.0f, "turned" },
+    {   // what a host sees: the same 21 parameters, by the same names, in the same order, with the same ranges and defaults
+        struct Want { const char* id; float lo, hi, def; int steps; };
+        const Want want[] = { { "spOrder", 0, 4, 0, 5 }, { "spFigure", 0, 14, 0, 15 }, { "spSeconds", 0.05f, 60, 4, 0 }, { "spRest", 0, 0.9f, 0, 0 }, { "spSize", 0.1f, 1, 0.9f, 0 },
+                              { "spHeight", -1, 1, 0, 0 }, { "spTurn", -180, 180, 0, 0 }, { "spApart", 0, 90, 30, 0 }, { "spCounter", 0, 1, 0, 0 }, { "spPoints", 2, 33, 8, 32 },
+                              { "spLegato", 0, 1, 0.5f, 0 }, { "spSwell", 0, 1, 0, 0 }, { "spLift", 0, 1, 0, 0 }, { "spChance", 0, 1, 0, 0 }, { "spWalk", 0, 1, 0, 0 },
+                              { "spScatter", 0, 1, 0, 0 }, { "spSieve", 0, 4, 0, 5 }, { "spRoom", 0, 1, 0.15f, 0 }, { "spRoomDecay", 0.3f, 20, 3, 0 }, { "spLevel", 0, 1.5f, 1, 0 },
+                              { "spHold", 0, 1, 0, 2 } };
+        LeitnerProcessor p;
+        bool ok = p.getParameters().size() == (int) std::size (want); String wrong;
+        for (int i = 0; ok && i < (int) std::size (want); ++i)
+        {
+            auto* r = dynamic_cast<RangedAudioParameter*> (p.getParameters()[i]);
+            const auto range = r->getNormalisableRange();
+            const bool same = r->getParameterID() == want[i].id && r->getVersionHint() == 1 && std::abs (range.start - want[i].lo) < 1.0e-6f && std::abs (range.end - want[i].hi) < 1.0e-6f
+                              && std::abs (r->convertFrom0to1 (r->getDefaultValue()) - want[i].def) < 1.0e-4f && (want[i].steps == 0 || r->getNumSteps() == want[i].steps);
+            if (! same) { ok = false; wrong = want[i].id; }
+        }
+        check (ok, "the 21 parameters a host sees are the ones 0.4 had: ids, order, ranges, defaults " + wrong);
+        check (p.getName() == "Leitner" && p.getNumPrograms() == 18 && LeitnerProcessor::presetExtension() == ".leitner", "the name, the 18 programs and the .leitner presets are as they were");
+
+        // it opens the same every time: every parameter at its default, the first program, the saddle as your drawing, nothing by chance
+        LeitnerProcessor q;
+        bool atDefault = p.getCurrentProgram() == 0;
+        for (auto* prm : p.getParameters()) atDefault = atDefault && std::abs (prm->getValue() - prm->getDefaultValue()) < 1.0e-6f;
+        MemoryBlock a, b; p.getStateInformation (a); q.getStateInformation (b);
+        check (atDefault && a == b, "a new Leitner opens at its defaults, and two new ones are the same to the byte");
+        const auto one = run (p, 1.0, true, true, 16), two = run (q, 1.0, true, true, 16);
+        bool sameSound = true;
+        for (int c = 0; c < 16 && sameSound; ++c) for (int i = 0; i < one.getNumSamples(); i += 7) if (one.getSample (c, i) != two.getSample (c, i)) { sameSound = false; break; }
+        check (sameSound, "and sound the same, sample for sample");
+
+        // the state a session keeps: the same element, version and attributes as 0.4 wrote
+        const auto x = AudioProcessor::getXmlFromBinary (a.getData(), (int) a.getSize());
+        bool stateOk = x != nullptr && x->hasTagName ("LEITNER") && x->getIntAttribute ("version") == 4 && x->getChildByName ("DRAWING") != nullptr
+                       && x->hasAttribute ("ltProgram") && x->hasAttribute ("viewYaw") && x->hasAttribute ("viewPitch") && x->getNumAttributes() == 21 + 4;
+        for (auto& w : want) stateOk = stateOk && x->hasAttribute (w.id);
+        check (stateOk, "the state is written as 0.4 wrote it (LEITNER, version 4, the 21 values, the program, the view, the drawing)");
+    }
+    {   // the window (in the faltung look): every parameter has its control, and the controls do what they did
+        LeitnerProcessor p;
+        std::unique_ptr<AudioProcessorEditor> ed (p.createEditor());
+        ed->setSize (LeitnerEditor::designW, LeitnerEditor::designH);
+        ed->setVisible (true);
+        MessageManager::getInstance()->runDispatchLoopUntil (60);
+        std::set<AudioProcessorParameter*> held;
+        std::vector<fal::ui::ParamSlider*> sliders; std::vector<fal::ui::ChoiceBox*> choices; std::vector<fal::ui::ToggleBox*> toggles; std::vector<fal::ui::TextLink*> links;
+        all (*ed, sliders); all (*ed, choices); all (*ed, toggles); all (*ed, links);
+        for (auto* c : sliders) held.insert (&c->param);
+        for (auto* c : choices) held.insert (&c->param);
+        for (auto* c : toggles) held.insert (&c->param);
+        bool every = true; String missing;
+        for (auto* prm : p.getParameters()) if (held.count (prm) == 0) { every = false; missing << prm->getName (20) << " "; }
+        check (every && sliders.size() == 17 && choices.size() == 3 && toggles.size() == 1,
+               String::formatted ("every parameter has its control: %d rows, %d lists, %d switch ", (int) sliders.size(), (int) choices.size(), (int) toggles.size()) + missing);
+        auto* room = find<lt::Room> (*ed); auto* strip = find<lt::FigureStrip> (*ed); auto* sheet = find<lt::DrawSheet> (*ed); auto* plan = find<lt::Plan> (*ed);
+        auto* presets = find<lt::Presets> (*ed);
+        check (room != nullptr && strip != nullptr && sheet != nullptr && plan != nullptr && find<lt::Chance> (*ed) != nullptr && presets != nullptr && links.size() == 8,
+               String::formatted ("the room, Leitner's side, the drawing sheet, Xenakis's side, the strips, the programs and %d text buttons are there", (int) links.size()));
+
+        // the strips: a click on the sixth is Kreis
+        const float slot = (float) strip->getWidth() / 15.0f;
+        click (*strip, { 5.5f * slot, 18.0f });
+        check (p.figure->getIndex() == leitner::fgCircle, "a click on the sixth strip chooses Kreis");
+        // a row: dragged to the right it rises; a mirrored one rises to the left; double-click puts it back
+        auto sliderFor = [&] (AudioProcessorParameter* prm) { for (auto* c : sliders) if (&c->param == prm) return c; return (fal::ui::ParamSlider*) nullptr; };
+        auto* rest = sliderFor (p.rest); auto* size = sliderFor (p.size);
+        drag (*rest, { 120.0f, 10.0f }, { 180.0f, 10.0f });
+        const float restUp = p.rest->get();
+        setP (p.size, 0.5f);
+        drag (*size, { 200.0f, 10.0f }, { 150.0f, 10.0f });
+        const float sizeUp = p.size->get();
+        rest->mouseDoubleClick (ev (*rest, { 120.0f, 10.0f }, { 120.0f, 10.0f }, ModifierKeys::leftButtonModifier, 2));
+        check (restUp > 0.1f && sizeUp > 0.55f && p.rest->get() == 0.0f,
+               String::formatted ("rows: dragged right, rest goes to %.0f %%; the mirrored size, dragged left, to %.0f %%; a double-click puts rest back", restUp * 100.0f, sizeUp * 100.0f));
+        // the switch
+        click (*toggles[0], { 8.0f, 10.0f });
+        check (p.hold->get(), "the switch holds the lines");
+        click (*toggles[0], { 8.0f, 10.0f });
+        // the room turns, and a double-click faces front again
+        drag (*room, { 300.0f, 200.0f }, { 240.0f, 150.0f });
+        const float yaw = p.viewYaw.load(), pitch = p.viewPitch.load();
+        room->mouseDoubleClick (ev (*room, { 300.0f, 200.0f }, { 300.0f, 200.0f }, ModifierKeys::leftButtonModifier, 2));
+        check (std::abs (yaw - 27.0f) < 0.5f && std::abs (pitch + 20.0f) < 0.5f && p.viewYaw.load() == 0.0f && p.viewPitch.load() == 0.0f,
+               String::formatted ("dragging the room turns it (to %.0f, %.0f degrees) and a double-click faces front again", yaw, pitch));
+        // the programs: the arrows step
+        click (*presets, { (float) presets->getWidth() - 6.0f, 10.0f });
+        check (p.getCurrentProgram() == 1, "the arrow beside the program's name steps to the next: " + p.getProgramName (p.getCurrentProgram()));
+        click (*presets, { 6.0f, 10.0f });
+        // your own figure: the text button goes there and back; the sheet takes clicks, drags, deletes and undo; the room moves a point
+        fal::ui::TextLink* own = nullptr;
+        for (auto* l : links) if (l->text == "draw your own figure") own = l;
+        check (own != nullptr, "the button to your own figure is there");
+        if (own != nullptr)
+        {
+            setP (p.figure, (float) leitner::fgGate);
+            MessageManager::getInstance()->runDispatchLoopUntil (80);
+            click (*own, { 10.0f, 10.0f });
+            MessageManager::getInstance()->runDispatchLoopUntil (80);
+            check (p.figure->getIndex() == leitner::fgDrawn && sheet->isVisible() && ! plan->isVisible() && own->text == "back to ton-tor", "it opens the drawing sheet, and reads: " + own->text);
+            setP (p.apart, 0.0f); setP (p.size, 1.0f);
+            const int before = p.drawing().count;
+            click (*sheet, { 30.0f, 72.0f });                                    // a new point, from above, at the front left
+            const auto added = p.drawing();
+            drag (*sheet, { 30.0f, 72.0f }, { 60.0f, 102.0f });                  // and moved
+            const auto moved = p.drawing();
+            int at = -1; for (int k = 0; k < moved.count; ++k) if (std::abs (moved.pt[k].y - added.pt[k].y) > 0.1f) at = k;
+            check (added.count == before + 1 && moved.count == before + 1 && at >= 0 && moved.pt[at].x < added.pt[at].x - 0.2f,
+                   String::formatted ("a click on the sheet adds a point (%d to %d); dragged, it moves", before, added.count));
+            sheet->mouseDoubleClick (ev (*sheet, { 60.0f, 102.0f }, { 60.0f, 102.0f }, ModifierKeys::leftButtonModifier, 2));
+            check (p.drawing().count == before, "a double-click takes it away");
+            sheet->keyPressed (KeyPress ('z', ModifierKeys::commandModifier, 0));
+            check (p.drawing().count == before + 1, "cmd-Z brings it back");
+            // the six beside the third view
+            fal::ui::TextLink* closed = nullptr;
+            for (auto* l : links) if (l->text == "a closed loop" || l->text == "open: there and back") closed = l;
+            const bool was = p.drawing().closed;
+            if (closed != nullptr) click (*closed, { 30.0f, 10.0f });
+            check (closed != nullptr && p.drawing().closed != was, "the loop opens and closes");
+            if (closed != nullptr) click (*closed, { 30.0f, 10.0f });
+            // in the room: take the first point by its square and move it across the view
+            p.viewYaw.store (0.0f); p.viewPitch.store (0.0f);
+            const auto d0 = p.drawing();
+            const float k = 0.31f * (float) room->getHeight() * (1.64f / (d0.pt[0].x + 2.64f));
+            const Point<float> at0 ((float) room->getWidth() * 0.5f - d0.pt[0].y * k, (float) room->getHeight() * 0.5f + 4.0f - d0.pt[0].z * k);
+            drag (*room, at0, at0 + Point<float> (-30.0f, -20.0f));
+            check (p.drawing().pt[0].y > d0.pt[0].y + 0.1f && p.drawing().pt[0].z > d0.pt[0].z + 0.05f && std::abs (p.drawing().pt[0].x - d0.pt[0].x) < 0.01f,
+                   "in the room a point is moved across the view, at its own depth");
+            // shift-drag in the room: a new path on the plane through the middle
+            const auto mods = ModifierKeys (ModifierKeys::leftButtonModifier | ModifierKeys::shiftModifier);
+            room->mouseDown (ev (*room, { 150.0f, 120.0f }, { 150.0f, 120.0f }, mods));
+            for (int i = 1; i <= 60; ++i)
+            {
+                const float t = (float) i / 60.0f * 6.2831853f;
+                room->mouseDrag (ev (*room, { 280.0f + 130.0f * std::cos (t + 3.1416f), 230.0f + 110.0f * std::sin (t + 3.1416f) }, { 150.0f, 120.0f }, mods, 1, true));
+            }
+            room->mouseUp (ev (*room, { 150.0f, 230.0f }, { 150.0f, 120.0f }, mods, 1, true));
+            float deepest = 0.0f; for (int i = 0; i < p.drawing().count; ++i) deepest = std::max (deepest, std::abs (p.drawing().pt[i].x));
+            check (p.drawing().count >= 6 && deepest < 0.02f, String::formatted ("shift-drag in the room draws a new path of %d points on the middle plane", p.drawing().count));
+            click (*own, { 10.0f, 10.0f });
+            MessageManager::getInstance()->runDispatchLoopUntil (80);
+            check (p.figure->getIndex() == leitner::fgGate && plan->isVisible(), "and back to the figure it came from");
+        }
+    }
+    {   // pictures of the window: as it opens, from the front, turned, Xenakis's figures, your own, 7th order, a stereo track;
+        // each whole and in its parts (the manual is made of these); and how nearly its two halves mirror
+        struct Shot { int figure; float yaw, pitch, scatter; const char* name; int channels = 64; };
+        const Shot shots[] = { { leitner::fgLine, 0.0f, 0.0f, 0.0f, "default", 16 }, { leitner::fgGate, 0.0f, 0.0f, 0.0f, "front" }, { leitner::fgSoundcube, 38.0f, 24.0f, 0.0f, "turned" },
                                { leitner::fgParaboloid, -30.0f, 18.0f, 0.0f, "paraboloid" }, { leitner::fgPolytope, 25.0f, 30.0f, 0.4f, "polytope" }, { leitner::fgCircle, 30.0f, 35.0f, 0.0f, "xenakis" },
-                               { leitner::fgDrawn, 32.0f, 22.0f, 0.0f, "drawn" } };
+                               { leitner::fgDrawn, 32.0f, 22.0f, 0.0f, "drawn" }, { leitner::fgSpiral, 150.0f, 12.0f, 0.0f, "seventh" }, { leitner::fgCube, -20.0f, 15.0f, 0.0f, "stereo", 2 } };
         for (auto& sh : shots)
         {
             LeitnerProcessor p;
-            setP (p.figure, (float) sh.figure); setP (p.seconds, 3.0f); setP (p.points, 12.0f); setP (p.scatter, sh.scatter);
+            const String name (sh.name);
+            if (name != "default")
+            {
+                setP (p.figure, (float) sh.figure); setP (p.seconds, 3.0f); setP (p.points, 12.0f); setP (p.scatter, sh.scatter);
+            }
             if (sh.figure == leitner::fgGate) setP (p.counter, 1.0f);
+            if (name == "seventh") { setP (p.order, 4.0f); setP (p.points, 24.0f); setP (p.lift, 0.4f); }
+            if (name == "stereo") setP (p.points, 8.0f);
             if (sh.figure == leitner::fgDrawn)
             {
                 // a knot of a path, picked at its fifth point
@@ -322,13 +535,24 @@ int main (int argc, char** argv)
                 for (int k = 0; k < 12; ++k) { const float t = (float) k / 12.0f * 6.2831853f; d.pt[k] = { 0.55f * (std::sin (t) + 0.6f * std::sin (2.0f * t)), 0.55f * (std::cos (t) - 0.6f * std::cos (2.0f * t)), -0.55f * std::sin (3.0f * t) }; }
                 p.setDrawing (d); setP (p.apart, 0.0f); setP (p.points, 24.0f);
             }
-            const bool xen = String (sh.name) == "xenakis" || String (sh.name) == "polytope";
+            const bool xen = name == "xenakis" || name == "polytope";
             if (xen) { setP (p.chance, 0.8f); setP (p.walk, 0.6f); setP (p.sieve, 2.0f); setP (p.points, 16.0f); setP (p.seconds, 0.25f); }
             p.viewYaw.store (sh.yaw); p.viewPitch.store (sh.pitch);
             std::unique_ptr<AudioProcessorEditor> ed (p.createEditor());
-            ed->setSize (1500, 790);
+            ed->setSize (LeitnerEditor::designW, LeitnerEditor::designH);
             ed->setVisible (true);
-            // let some passes go by (the Xenakis sheet draws the passes it has seen)
+            if (sh.figure == leitner::fgDrawn)
+            {
+                // (pick the fifth point as a click on the sheet would)
+                MessageManager::getInstance()->runDispatchLoopUntil (80);
+                if (auto* sheet = find<lt::DrawSheet> (*ed))
+                {
+                    const auto v = p.drawing().pt[4];
+                    const Point<float> at (100.0f - v.y * 90.0f, 142.0f - v.x * 90.0f);
+                    sheet->mouseDown (ev (*sheet, at, at)); sheet->mouseUp (ev (*sheet, at, at));
+                }
+            }
+            // let some passes go by (the Xenakis side draws the passes it has seen)
             if (xen)
             {
                 // one run, many passes: the window watches between blocks
@@ -345,18 +569,30 @@ int main (int argc, char** argv)
                     MessageManager::getInstance()->runDispatchLoopUntil (40);
                 }
             }
-            else run (p, 0.8, true, true);
+            else run (p, 0.8, true, true, sh.channels);
             if (xen) setP (p.seconds, 3.0f);
             MessageManager::getInstance()->runDispatchLoopUntil (150);
-            const auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.5f);
-            const auto f = outDir.getChildFile ("leitner_" + String (sh.name) + ".png"); f.deleteFile();
-            FileOutputStream os (f);
-            PNGImageFormat().writeImageToStream (img, os);
-            if (sh.yaw == 0.0f)
+            const float scale = 1.5f;
+            const auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, scale);
+            auto save = [&] (const Image& im, const String& part)
+            {
+                const auto f = outDir.getChildFile ("leitner_" + name + (part.isEmpty() ? "" : "_" + part) + ".png"); f.deleteFile();
+                FileOutputStream os (f);
+                PNGImageFormat().writeImageToStream (im, os);
+            };
+            save (img, {});
+            auto part = [&] (Rectangle<int> r, const String& what) { save (img.getClippedImage ((r.toFloat() * scale).toNearestInt()), what); };
+            part (lt::lay::stage(), "room");
+            part (lt::lay::left().expanded (6, 4), "left");
+            part (lt::lay::right().expanded (6, 4), "right");
+            part (lt::lay::strips().expanded (4, 2), "strips");
+            part (lt::lay::controls(), "controls");
+            if (name == "front")
             {
                 // ink on the left half against ink on the right half, in 30-pixel cells: text can't mirror letter for
                 // letter, but where there is ink on one side there should be ink on the other
                 const int W = img.getWidth(), H = img.getHeight(), cell = 30;
+                const float ground = lt::paper.getBrightness();
                 int same = 0, total = 0;
                 for (int cy = 0; cy + cell <= H; cy += cell)
                     for (int cx = 0; cx + cell <= W / 2; cx += cell)
@@ -365,15 +601,19 @@ int main (int argc, char** argv)
                         for (int y = cy; y < cy + cell; y += 2)
                             for (int x = cx; x < cx + cell; x += 2)
                             {
-                                if (img.getPixelAt (x, y).getBrightness() < 0.6f) ++l;
-                                if (img.getPixelAt (W - 1 - x, y).getBrightness() < 0.6f) ++r;
+                                if (img.getPixelAt (x, y).getBrightness() < ground - 0.06f) ++l;
+                                if (img.getPixelAt (W - 1 - x, y).getBrightness() < ground - 0.06f) ++r;
                             }
                         ++total; if ((l > 2) == (r > 2)) ++same;
                     }
-                // (the side sheets mirror in their layout, not their drawings: Leitner's plan and elevation on
-                // the left, Xenakis's sieve, chance and walk on the right)
+                // (the sides mirror in their layout, not their drawings: Leitner's plan and elevation on
+                // the left, Xenakis's chance, walk and sieve on the right)
                 check (same > total * 70 / 100, String::formatted ("the window mirrors: %d of %d cells have ink on both sides or neither", same, total));
+                // and it is in the faltung look, on Leitner's paper: the ground is the cream it has always had
+                const auto corner = img.getPixelAt (8, 8), field = img.getPixelAt (roundToInt ((lt::lay::stageX + 6) * scale), roundToInt ((lt::lay::bandY + 60) * scale));
+                check (corner == lt::paper && field == lt::desk, "the ground is Leitner's paper (" + corner.toDisplayString (false) + ") and the room its one darker field (" + field.toDisplayString (false) + ")");
             }
+            if (name == "stereo") check (p.orderNow.load() == 0, "on a stereo track the window says so");
         }
     }
     std::printf ("\n%s (%d failed)\n", failures == 0 ? "all good" : "FAILURES", failures);

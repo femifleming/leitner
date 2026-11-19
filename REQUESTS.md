@@ -1,6 +1,6 @@
 # Request log
 
-Every request typed while Leitner was designed and built with Claude Code, in order and as written. Leitner began inside Cloudfin's repository, so its first requests are also in [Cloudfin's log](https://github.com/femifleming/Cloudfin/blob/main/REQUESTS.md).
+Every request typed while Leitner was designed and built with Claude Code, in order and as written. Leitner began inside Cloudfin's repository, so its first requests are also in [Cloudfin's log](https://github.com/femifleming/faltung/blob/main/cloudfin/REQUESTS.md).
 
 ## 2026-11-12 (in Cloudfin)
 
@@ -27,3 +27,17 @@ Every request typed while Leitner was designed and built with Claude Code, in or
 > for leigtner, add an editor to draw my own trajectories in 3d space.
 
 1. "for every single app and vst on my github, just make the app logo icon extremely minimal, a letter from this font [Septambres Neau] in some color, on some color background, update all the app icons." (New app icons: one Septambres Neau glyph, one colour on one colour.)
+
+## 2026-11-17 (0.5.0: the faltung look; from a longer message about several projects)
+
+> Make Leigner in the aesthetics of faltung, but keep the cream color palette. Keep aligner as its own repo once you change the aesthetic. Delete the old version of leigtner.
+
+> make sure all vsts work well. some vsts mono the sound as opposed to the vst3 that works well, just double check.
+
+## 2026-11-18
+
+> ### Leigner
+> - Redesign Leigner to match the Faltung aesthetic while retaining its existing cream-colored palette.
+> - Keep Leigner as an independent repository. Do not integrate it into the Faltung suite.
+> - Remove the outdated version of Leigner once the replacement has been successfully implemented and verified.
+> - Ensure the new version retains all existing functionality.

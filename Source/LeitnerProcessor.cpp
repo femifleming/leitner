@@ -172,10 +172,14 @@ bool LeitnerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
     for (int o = 1; o <= fp::ambi::kMaxOrder; ++o)
     {
         ok = ok || out == AudioChannelSet::ambisonic (o);
-        ok = ok || (out == AudioChannelSet::discreteChannels (fp::ambi::chFor (o)) && wrapperType != wrapperType_AudioUnit);
+        // (a VST3 host may name a plain count as some surround layout of that size: the count is what matters)
+        ok = ok || (out.size() == fp::ambi::chFor (o) && wrapperType != wrapperType_AudioUnit);
     }
     if (! ok) return false;
-    return in == AudioChannelSet::mono() || in == AudioChannelSet::stereo();
+    // mono or stereo in; a VST3 host that sizes the input like the output (REAPER, on a track with more channels
+    // than two) gets it too: only the first two channels are read, as left and right
+    return in == AudioChannelSet::mono() || in == AudioChannelSet::stereo()
+        || (wrapperType != wrapperType_AudioUnit && in.size() == out.size());
 }
 
 leitner::Params LeitnerProcessor::readSpace() const

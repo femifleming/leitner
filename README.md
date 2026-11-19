@@ -8,6 +8,8 @@ A spatialization plug-in after **Bernhard Leitner** and **Iannis Xenakis**. The 
 
 **[The manual (PDF)](docs/manual/Leitner%20Manual.pdf)**
 
+Since 0.5 it is drawn in the look of the [faltung](https://github.com/femifleming/faltung) plug-ins, on its own cream paper: [before and after](docs/before-after). It is the same instrument, and stays its own plug-in in its own repository: every control is where its name says, and sessions, presets and automation from 0.4 open as they were.
+
 It is an **encoder**: stereo (or mono) goes in, Ambisonics come out (ACN channel order, SN3D normalisation, the format of the IEM and SPARTA plug-ins), 3rd to 7th order. It decodes nothing itself.
 
 | Order | Channels |
@@ -66,17 +68,19 @@ A line can pass through the middle of the room: near the centre the higher order
 
 ## The window
 
-Three typed sheets after Leitner's 1969 Soundcube sheets, mirror symmetrical in their layout:
+Drawn in the faltung look: one flat cream ground, one darker field for the room, thin lines, lowercase Inter and IBM Plex Mono, rows made of a thin rule with a slanted bar. Ink for line 1 and red for line 2, the one red thing, after the red rods of Leitner's Plexiglas models. It is mirror symmetrical:
 
-- **in the middle**, the room in perspective with its loudspeakers as small circles, the two lines of sound with arrows and a solid black figure standing in it, and every control of the space under it in two facing columns. **Drag the room to turn it**; double-click it to face front again.
-- **on the left, Ton-Raum**: the figure drawn as an architect draws a building, in plan (from above) and elevation (from the side), with its loudspeakers and where each line is sounding now.
-- **on the right, its mirror, stochastic space**: the sieve (which loudspeakers sound), the length chance gave each of the last passes, and the trail of the random walk.
+- **in the middle**, the room as a thin wireframe in its field, its loudspeakers as small circles, the wall you face as one white face, a solid ink figure standing in it, and the two lines of sound with the loudspeakers each is built from as small slanted chips. **Drag the room to turn it**; double-click it to face front again. However it is turned, all of it stays in its field.
+- **on the left, Ton-Raum**: the figure drawn as an architect draws a building, in plan (from above) and elevation (from the side), with its loudspeakers and where each line is sounding now, and what it is in words.
+- **on the right, its mirror, stochastic space**: the length chance gave each of the last passes, the trail of the random walk, and the sieve (which loudspeakers sound).
+- **under them, the figures** as a row of fifteen folded paper strips, each with a short code (`tl1`, `kr6`, `pt14`...): Leitner's eleven in the sands of the paper, Xenakis's three with the red in them, your own dashed. Click one to choose it.
+- **then the controls**: *level*, *hold*, *draw your own figure* and *order* on one line, and the rest in four columns: the line in time, by chance (after Xenakis), intensity and the room round it, the line in the room. The two right-hand columns are read from the right.
 
-Every parameter is a ruled line with a tick: click or drag along it, double-click to put it back. The red of line 2 is after the red rods of Leitner's Plexiglas models.
+Every parameter is a row: drag it (shift for fine steps, or the mouse wheel), double-click to put it back. Lists (*figure*, *sieve*, *order*) open on a click or step when dragged up and down. Rest the mouse on anything for a line about it.
 
 ## Programs and your own presets
 
-The **program** button lists eighteen spaces, eleven after Leitner and seven after Xenakis (among them **Persephassa**, six points round you, and **Nomos Gamma**, a scattered cloud that wanders). They leave the Ambisonic order alone. **save this as a preset...** writes the space to a `.leitner` file in your presets folder (`~/Library/Application Support/FreakiePie/Leitner/Presets` on macOS, `%APPDATA%\FreakiePie\Leitner\Presets` on Windows, `~/.config/FreakiePie/Leitner/Presets` on Linux), and **a random patch** makes a new space.
+The programs are at the top left, `< name >`: the arrows step, a click on the name lists eighteen spaces, eleven after Leitner and seven after Xenakis (among them **Persephassa**, six points round you, and **Nomos Gamma**, a scattered cloud that wanders). They leave the Ambisonic order alone. In that list, **save this as a preset...** writes the space to a `.leitner` file in your presets folder (`~/Library/Application Support/FreakiePie/Leitner/Presets` on macOS, `%APPDATA%\FreakiePie\Leitner\Presets` on Windows, `~/.config/FreakiePie/Leitner/Presets` on Linux), and **a random patch** (top right) makes a new space. A new Leitner always opens the same way: every control where it starts, on the first program, nothing by chance.
 
 ## The figures, and where they come from
 
@@ -100,7 +104,7 @@ The **program** button lists eighteen spaces, eleven after Leitner and seven aft
 
 ## Drawing your own figure
 
-Choose **Eigene Zeichnung** from *figure*, or press **draw your own figure** under the controls. The left-hand sheet becomes a drawing sheet with your path seen from above, from the side and from behind, and your points also appear in the room as small squares on line 1.
+Click the last strip (*zeichnung*), choose **Eigene Zeichnung** from *figure*, or click **draw your own figure** under the strips. The left-hand side becomes a drawing sheet, three white squares of paper with your path seen from above, from the side and from behind, and your points also appear in the room as small squares on line 1.
 
 - **click** a view to add a point (on the line: between two), **drag** a point to move it, **double-click** it (or press delete) to take it away, **cmd-Z** to undo;
 - **shift-drag** on a view, or on the room, to draw a whole new path freehand. In the room it is drawn on the plane through the middle facing you, so turn the room first to draw at any angle;
@@ -119,11 +123,11 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target Leitner_All
 ```
 
-`-DLEITNER_BUILD_TESTS=ON` adds `LeitnerTest`, which checks the harmonics, the encoded directions, the mirror image, the raster, the sieves, chance, every order, that the sound passes unchanged, the programs, presets and old sessions, your own drawn figure (the sound follows it, it is saved, freehand strokes are thinned), and takes pictures of the window. On Linux, install JUCE's usual dependencies first (ALSA, FreeType, fontconfig, X11, OpenGL; see the build workflow).
+`-DLEITNER_BUILD_TESTS=ON` adds `LeitnerTest`, which checks the harmonics, the encoded directions, the mirror image, the raster, the sieves, chance, every order, that the sound passes unchanged, the programs, presets and old sessions, your own drawn figure (the sound follows it, it is saved, freehand strokes are thinned), that a host sees the same parameters as before and a new instance opens at its defaults, works the window's controls with the mouse, and takes pictures of the window, whole and in parts (`python3 docs/manual/make.py` makes the manual from them). `LeitnerTest --render in.wav out.wav channels` runs the processor on a file. On Linux, install JUCE's usual dependencies first (ALSA, FreeType, fontconfig, X11, OpenGL; see the build workflow).
 
 ## History
 
-Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/faltung/tree/main/cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space. 0.4 added a fifteenth figure, your own, drawn in three dimensions; sessions from 0.2 and 0.3 open on the figure they had (a host's automation of *figure* made with 0.3 may point one figure along).
+Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/faltung/tree/main/cloudfin) as Cloudfin's effects followed by a spatial stage (0.1, 0.2). In 0.3 it became a spatialization plug-in only, in its own repository: the effects, and a pulse layer after Mark Fell, Gábor Lázár and Kindohm, were taken out, keeping what belongs to the world of Leitner and Xenakis. Sessions and presets from 0.2 open with their space. 0.4 added a fifteenth figure, your own, drawn in three dimensions; sessions from 0.2 and 0.3 open on the figure they had (a host's automation of *figure* made with 0.3 may point one figure along). 0.5 changed how it looks and nothing else: the typed sheets after Leitner's 1969 Soundcube drawings became the faltung look on the same cream paper, with the same parameters, programs, presets and sessions. One fix came with it: as a VST3 in REAPER on a track of more than two channels, 0.4 was given a stereo input and output and played only the stereo fold; 0.5 takes the track's width, so every Ambisonic channel comes out.
 
 ## Credits and notes
 
@@ -131,4 +135,5 @@ Leitner began in 2026 inside [Cloudfin](https://github.com/femifleming/faltung/t
 - The Xenakis ideas (stochastic durations, random walks, clouds of points, sieves; Metastaseis and the Philips Pavilion, Terretektorh, Persephassa, Nomos Gamma, the Polytopes) were written from general knowledge of his work and *Formalized Music*, not checked against the scores: the three figures are interpretations.
 - Sources for the figures and the drawing style: *P.U.L.S.E.* (Hatje Cantz / ZKM, 2008), which reprints his 1977 Sound Space Manifesto and the Soundcube sheets; Sven Sterken, "Architecture without Walls: Bernhard Leitner's Soundcube" (2024); his 2011 lecture "Sound Spaces"; and the work list at bernhardleitner.at.
 - The Ambisonic conventions follow the IEM Plug-in Suite and SPARTA, and the room is built like the IEM FdnReverb, as in Pinkie Pie's Balloon Palace, whose Ambisonics code this shares. No code from IEM or SPARTA is included.
+- The look since 0.5 is that of the faltung plug-ins; its controls are faltung's own (`Source/Ui.*`), copied here. The typefaces, Inter (Rasmus Andersson) and IBM Plex Mono (IBM), are under the SIL Open Font License (`Resources/fonts`).
 - Licence: AGPL v3. Built with JUCE.

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal binary")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS")
 
-project(Leitner VERSION 0.4.1 LANGUAGES C CXX)
+project(Leitner VERSION 0.5.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -30,7 +30,7 @@ else()
 endif()
 
 juce_add_plugin(Leitner
-    VERSION 0.4.1
+    VERSION 0.5.0
     COMPANY_NAME "FreakiePie"
     COMPANY_WEBSITE "https://github.com/femifleming/Leitner"
     BUNDLE_ID "com.freakiepie.leitner"
@@ -50,7 +50,13 @@ juce_add_plugin(Leitner
     VST3_CATEGORIES Fx Spatial
     COPY_PLUGIN_AFTER_BUILD ${LEITNER_COPY_AFTER_BUILD})
 
-set(LT_SOURCES Source/LeitnerProcessor.cpp Source/LeitnerEditor.cpp)
+# the faltung faces: lowercase Inter and IBM Plex Mono (SIL Open Font License, Resources/fonts)
+juce_add_binary_data(LeitnerData HEADER_NAME LeitnerData.h NAMESPACE LeitnerData SOURCES
+    Resources/fonts/Inter-Regular.ttf Resources/fonts/Inter-Medium.ttf
+    Resources/fonts/IBMPlexMono-Regular.ttf Resources/fonts/IBMPlexMono-Medium.ttf)
+set_target_properties(LeitnerData PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+set(LT_SOURCES Source/LeitnerProcessor.cpp Source/LeitnerEditor.cpp Source/Ui.cpp)
 set(LT_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
 set(LT_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/Source" "${CMAKE_CURRENT_SOURCE_DIR}/Source/dsp")
 
@@ -59,6 +65,7 @@ target_compile_definitions(Leitner PUBLIC ${LT_DEFS})
 target_include_directories(Leitner PRIVATE ${LT_INCLUDES})
 target_link_libraries(Leitner
     PRIVATE
+        LeitnerData
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -74,5 +81,5 @@ if(LEITNER_BUILD_TESTS)
     target_sources(LeitnerTest PRIVATE tests/OfflineTest.cpp ${LT_SOURCES})
     target_compile_definitions(LeitnerTest PRIVATE ${LT_DEFS} JUCE_MODAL_LOOPS_PERMITTED=1)
     target_include_directories(LeitnerTest PRIVATE ${LT_INCLUDES})
-    target_link_libraries(LeitnerTest PRIVATE juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats PUBLIC juce::juce_recommended_config_flags)
+    target_link_libraries(LeitnerTest PRIVATE LeitnerData juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats PUBLIC juce::juce_recommended_config_flags)
 endif()
